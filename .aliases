@@ -54,10 +54,10 @@ alias gre="vi -p \$(git diff --name-only --diff-filter=U)"
 # # misc
 alias reloadSource="source ~/.zshrc"
 alias fd=fdfind
-alias toClipBoard="xclip -i -selection clipboard"
+alias toClipBoard="wl-copy"
 alias ssh="ssh -v"
 alias listLargeFiles="sudo du -h / 2>/dev/null | grep '[0-9\.]\+G'"
-alias ls="exa -alh --color=auto"
+alias ls="eza -alh --color=auto"
 alias fdf="fd --type f -H"
 alias fdd="fd --type d"
 alias cat="\$(which bat) -p --paging never"
@@ -82,6 +82,8 @@ alias govendor="go mod tidy -compat=1.17; go mod vendor"
 alias z="zoxide"
 alias zl="z \$(zoxide query -l | fzf)"
 
+alias open_pr="gh pr view --web"
+
 alias listAWSProfiles="aws configure list-profiles"
 
 yq() {
@@ -90,3 +92,11 @@ yq() {
 
 alias vim="nvim"
 alias vi="nvim"
+
+# Force Slack snap to use Wayland
+alias slack="ELECTRON_OZONE_PLATFORM_HINT=wayland /snap/bin/slack --enable-features=UseOzonePlatform,WaylandWindowDecorations --ozone-platform=wayland --disable-gpu-sandbox"
+
+# Zoom client
+alias zoom="/snap/bin/zoom-client"
+
+alias screenshot-area="grim -g \"\$(slurp)\" - | swappy -f -"

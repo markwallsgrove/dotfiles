@@ -34,3 +34,6 @@ vim.opt.showmode = false
 vim.opt.ruler = false
 vim.opt.laststatus = 0
 vim.opt.showcmd = false
+
+-- use global clipboard
+vim.opt.clipboard = "unnamedplus"

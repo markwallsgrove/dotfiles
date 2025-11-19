@@ -120,3 +120,33 @@ fi
 if [ -x "$(command -v fzf)" ]; then
     eval "$(fzf --zsh)"
 fi
+
+# pnpm
+# export PNPM_HOME="/home/markwallsgrove/.local/share/pnpm"
+# case ":$PATH:" in
+#   *":$PNPM_HOME:"*) ;;
+#   *) export PATH="$PNPM_HOME:$PATH" ;;
+# esac
+# pnpm end
+
+
+export PYENV_ROOT="$HOME/.pyenv"
+[[ -d $PYENV_ROOT/bin ]] && export PATH="$PYENV_ROOT/bin:$PATH"
+eval "$(pyenv init -)"
+
+export PATH=$PATH:$HOME/.garden/bin
+
+# asdf
+# append completions to fpath
+fpath=(${ASDF_DATA_DIR:-$HOME/.asdf}/completions $fpath)
+# initialise completions with ZSH's compinit
+autoload -Uz compinit && compinit
+
+# developer toolbox
+export PATH=$PATH:/home/markwallsgrove/projects/github/automata-tech/developer-toolbox
+
+# opencode
+export PATH=/home/markwallsgrove/.opencode/bin:$PATH
+
+# Cannot find libudev. Setting where the libraries are
+export PKG_CONFIG_PATH="/usr/lib/x86_64-linux-gnu/pkgconfig/:/usr/share/pkgconfig:/usr/lib/x86_64-linux-gnu/pkgconfig"
