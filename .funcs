@@ -1,0 +1,153 @@
+#!/usr/bin/env bash
+
+refresh_codeartifact() {
+    aws sso login
+    aws codeartifact login \
+        --tool pip \
+        --repository pypi \
+        --domain automata \
+        --domain-owner 401732561735 \
+        --region eu-west-1
+
+    token=$(aws codeartifact get-authorization-token \
+        --domain "automata" \
+        --domain-owner "401732561735" \
+        --query authorizationToken \
+        --output text)
+
+    echo -n "$token" | keyring set https://automata-401732561735.d.codeartifact.eu-west-1.amazonaws.com/pypi/pypi/simple/ aws
+    echo -n "$token" | keyring set https://automata-401732561735.d.codeartifact.eu-west-1.amazonaws.com/pypi/pypi/simple aws
+
+    #aws codeartifact get-authorization-token \
+    #    --domain "automata" \
+    #    --domain-owner "401732561735" \
+    #    --query authorizationToken \
+    #    --output text | keyring set https://automata-401732561735.d.codeartifact.eu-west-1.amazonaws.com/pypi/pypi/simple/ aws
+}
+
+refresh_poetry() {
+    # Refresh Poetry credentials for CodeArtifact
+    # Optionally pass --sso to also run aws sso login first
+    if [[ "$1" == "--sso" ]]; then
+        aws sso login || { echo "SSO login failed" >&2; return 1; }
+    fi
+
+    local token
+    token=$(aws codeartifact get-authorization-token \
+        --domain "automata" \
+        --domain-owner "401732561735" \
+        --region eu-west-1 \
+        --query authorizationToken \
+        --output text) || { echo "Failed to get CodeArtifact token" >&2; return 1; }
+
+    export POETRY_HTTP_BASIC_AUTOMATA_USERNAME=aws
+    export POETRY_HTTP_BASIC_AUTOMATA_PASSWORD="$token"
+}
+
+authentik-portfoward() {
+    server=$(kubectl get pods -n authentik | awk '/server/ { print $1 }')
+    kubectl port-forward -n authentik pod/$server 9443:9443
+}
+
+unalias gwt 2>/dev/null
+gwt() {
+    local main_worktree
+
+    if ! git rev-parse --git-dir >/dev/null 2>&1; then
+        local repo_dir
+        repo_dir=$(find ~/projects -maxdepth 5 -name ".git" -type d \
+            -not -path "*/node_modules/*" \
+            -not -path "*/.worktrees/*" \
+            -not -path "*/vendor/*" \
+            2>/dev/null \
+            | sed 's|/\.git$||' \
+            | sort \
+            | fzf --prompt="Select repository: " --height=40% --reverse)
+
+        if [[ -z "$repo_dir" ]]; then
+            echo "gwt: no repository selected" >&2
+            return 1
+        fi
+
+        main_worktree="$repo_dir"
+    else
+        main_worktree=$(git worktree list --porcelain | awk '/^worktree /{print substr($0, 10); exit}')
+
+        if [[ -z "$main_worktree" ]]; then
+            echo "gwt: failed to determine main worktree" >&2
+            return 1
+        fi
+    fi
+
+    local branch
+    if [[ -n "$1" ]]; then
+        branch="$1"
+    else
+        branch=$({
+            git -C "$main_worktree" branch --format='%(refname:short)' 2>/dev/null
+            git -C "$main_worktree" branch -r --format='%(refname:short)' 2>/dev/null \
+                | grep -v '^[^/]*/HEAD$' \
+                | grep -v '^[^/]*$' \
+                | sed 's|^[^/]*/||'
+        } | sort -u | fzf --prompt="Select branch: " --height=40% --reverse)
+    fi
+
+    if [[ -z "$branch" ]]; then
+        echo "gwt: no branch selected" >&2
+        return 1
+    fi
+
+    local worktree_path
+    worktree_path=$(git -C "$main_worktree" worktree list --porcelain \
+        | awk -v branch="refs/heads/$branch" '
+            /^worktree /{ wt = substr($0, 10) }
+            /^branch /{ if (substr($0, 8) == branch) print wt }
+        ')
+
+    if [[ -n "$worktree_path" ]]; then
+        echo "gwt: branch '$branch' already checked out at $worktree_path"
+        builtin cd "$worktree_path"
+        zoxide add "$worktree_path"
+        return 0
+    fi
+
+    local repo_name parent_dir branch_dir_name worktree_dest
+    repo_name=$(basename "$main_worktree")
+    parent_dir=$(dirname "$main_worktree")
+    branch_dir_name="${branch//\//-}"
+    worktree_dest="$parent_dir/.worktrees/$repo_name/$branch_dir_name"
+
+    if git -C "$main_worktree" show-ref --verify --quiet "refs/heads/$branch"; then
+        git -C "$main_worktree" worktree add "$worktree_dest" "$branch"
+    elif git -C "$main_worktree" show-ref --verify --quiet "refs/remotes/origin/$branch"; then
+        git -C "$main_worktree" worktree add --track -b "$branch" "$worktree_dest" "origin/$branch"
+    else
+        git -C "$main_worktree" worktree add -b "$branch" "$worktree_dest" main
+    fi
+
+    if [[ $? -ne 0 ]]; then
+        echo "gwt: failed to create worktree" >&2
+        return 1
+    fi
+
+    echo "gwt: created worktree at $worktree_dest"
+    builtin cd "$worktree_dest"
+    zoxide add "$worktree_dest"
+}
+
+wcd() {
+    local base=~/projects/github/automata-tech/.worktrees
+    local selection
+    selection=$(find "$base" -mindepth 2 -maxdepth 2 -type d \
+        | sed "s|^$base/||" \
+        | sort \
+        | fzf --prompt="Select worktree: " --height=40% --reverse --query="$*")
+
+    if [[ -z "$selection" ]]; then
+        echo "wcd: no worktree selected" >&2
+        return 1
+    fi
+
+    builtin cd "$base/$selection"
+    zoxide add "$base/$selection"
+}
