@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+current_session=$(tmux display-message -p '#S')
+
+selected=$(
+  tmux list-sessions -F '#{session_name}: #{session_windows} windows (created #{t:session_created})' |
+    grep -v "^${current_session}:" |
+    fzf --multi \
+        --header="Kill sessions (current: ${current_session} excluded) | Tab=toggle, Enter=confirm" \
+        --prompt="Select sessions to kill> " ||
+    true
+)
+
+[[ -z "$selected" ]] && exit 0
+
+while IFS= read -r line; do
+  session_name="${line%%:*}"
+  tmux kill-session -t "$session_name"
+done <<< "$selected"

@@ -16,6 +16,12 @@ require('lualine').setup {
       {
         'buffers',
       }
+    },
+    lualine_c = {
+      {
+        'filename',
+        path = 1,
+      }
     }
   }
 }

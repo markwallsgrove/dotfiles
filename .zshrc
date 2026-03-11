@@ -69,7 +69,16 @@ ZSH_THEME="robbyrussell"
 # Custom plugins may be added to $ZSH_CUSTOM/plugins/
 # Example format: plugins=(rails git textmate ruby lighthouse)
 # Add wisely, as too many plugins slow down shell startup.
-plugins=(git asdf)
+plugins=(git)
+
+# Use zsh's native _git completion (shows commits for --fixup=, etc.)
+[[ -L "$HOMEBREW_PREFIX/share/zsh/site-functions/_git" ]] && rm -f "$HOMEBREW_PREFIX/share/zsh/site-functions/_git"
+
+# Set up completion directories BEFORE oh-my-zsh loads
+fpath=($HOME/.zsh_completions $fpath)
+fpath+=${ZSH_CUSTOM:-${ZSH:-~/.oh-my-zsh}/custom}/plugins/zsh-completions/src
+# fpath=(${ASDF_DATA_DIR:-$HOME/.asdf}/completions $fpath)
+fpath=(/opt/homebrew/share/zsh/site-functions $fpath)
 
 source $ZSH/oh-my-zsh.sh
 
@@ -77,6 +86,7 @@ source $ZSH/oh-my-zsh.sh
 [ -f ~/.secrets ] && source ~/.secrets
 [ -f ~/.aliases ] && source ~/.aliases
 [ -f ~/.local_exports ] && source ~/.local_exports
+[ -f ~/.funcs ] && source ~/.funcs
 
 # User configuration
 
@@ -121,32 +131,13 @@ if [ -x "$(command -v fzf)" ]; then
     eval "$(fzf --zsh)"
 fi
 
-# pnpm
-# export PNPM_HOME="/home/markwallsgrove/.local/share/pnpm"
-# case ":$PATH:" in
-#   *":$PNPM_HOME:"*) ;;
-#   *) export PATH="$PNPM_HOME:$PATH" ;;
-# esac
-# pnpm end
+export NVM_DIR="$HOME/.nvm"
+[ -s "/opt/homebrew/opt/nvm/nvm.sh" ] && \. "/opt/homebrew/opt/nvm/nvm.sh"  # This loads nvm
+[ -s "/opt/homebrew/opt/nvm/etc/bash_completion.d/nvm" ] && \. "/opt/homebrew/opt/nvm/etc/bash_completion.d/nvm"  # This loads nvm bash_completion
+eval "$(/opt/homebrew/bin/mise activate zsh)"
 
-
-export PYENV_ROOT="$HOME/.pyenv"
-[[ -d $PYENV_ROOT/bin ]] && export PATH="$PYENV_ROOT/bin:$PATH"
-eval "$(pyenv init -)"
-
-export PATH=$PATH:$HOME/.garden/bin
-
-# asdf
-# append completions to fpath
-fpath=(${ASDF_DATA_DIR:-$HOME/.asdf}/completions $fpath)
-# initialise completions with ZSH's compinit
-autoload -Uz compinit && compinit
-
-# developer toolbox
-export PATH=$PATH:/home/markwallsgrove/projects/github/automata-tech/developer-toolbox
-
-# opencode
-export PATH=/home/markwallsgrove/.opencode/bin:$PATH
-
-# Cannot find libudev. Setting where the libraries are
-export PKG_CONFIG_PATH="/usr/lib/x86_64-linux-gnu/pkgconfig/:/usr/share/pkgconfig:/usr/lib/x86_64-linux-gnu/pkgconfig"
+bindkey -s ^f "tmux-sessionizer\n"
+bindkey -s '\eh' "tmux-sessionizer -s 0\n"
+bindkey -s '\et' "tmux-sessionizer -s 1\n"
+bindkey -s '\en' "tmux-sessionizer -s 2\n"
+bindkey -s '\es' "tmux-sessionizer -s 3\n"

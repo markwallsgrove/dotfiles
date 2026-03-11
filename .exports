@@ -4,14 +4,33 @@ export EDITOR="$VISUAL"
 
 export GIT_WORKSPACE=~/projects
 
+# mise shims for non-interactive shells (Claude Code, scripts, etc.)
+export PATH="$HOME/.local/share/mise/shims:$PATH"
+
 export PATH="$PATH:/usr/local/go/bin"
+export PATH="$PATH:/Users/mark.w/go/bin"
 export PATH="$PATH:/home/linuxbrew/.linuxbrew/bin"
 export PATH="$PATH:/home/markwallsgrove/go/bin"
 export PATH="$PATH:$HOME/.local/bin"
+export PATH="$PATH:/opt/homebrew/opt/libpq/bin"
+export PATH="$PATH:/Users/mark.w/.cargo/bin"
+
+# export PATH="/Users/mark.w/.local/bin:/Users/mark.w/.asdf/installs/python/3.12.2/bin:$PATH"
+
+# developer toolbox
+export PATH=$PATH:/home/markwallsgrove/projects/github/automata-tech/developer-toolbox
+
+# opencode
+export PATH=/home/markwallsgrove/.opencode/bin:$PATH
+
+# Cannot find libudev. Setting where the libraries are
+export PKG_CONFIG_PATH="/usr/lib/x86_64-linux-gnu/pkgconfig/:/usr/share/pkgconfig:/usr/lib/x86_64-linux-gnu/pkgconfig"
 
 export TERMINAL=gnome-terminal
 
 export ELECTRON_OZONE_PLATFORM_HINT=wayland
+
+export OTEL_SDK_DISABLED=true
 
 setopt INC_APPEND_HISTORY        # Write to the history file immediately, not when the shell exits.
 setopt SHARE_HISTORY             # Share history between all sessions.
@@ -22,3 +41,5 @@ setopt HIST_FIND_NO_DUPS         # Do not display a line previously found.
 setopt HIST_SAVE_NO_DUPS         # Don't write duplicate entries in the history file.
 setopt HIST_REDUCE_BLANKS        # Remove superfluous blanks before recording entry.
 setopt HIST_VERIFY               # Don't execute immediately upon history expansion.
+
+export DOTNET_ROOT="/opt/homebrew/opt/dotnet/libexec"

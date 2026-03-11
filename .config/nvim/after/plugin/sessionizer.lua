@@ -1,0 +1,5 @@
+bind-key -r f run-shell "tmux neww ~/.local/bin/tmux-sessionizer"
+bind-key -r M-h run-shell "tmux neww tmux-sessionizer -s 0"
+bind-key -r M-t run-shell "tmux neww tmux-sessionizer -s 1"
+bind-key -r M-n run-shell "tmux neww tmux-sessionizer -s 2"
+bind-key -r M-s run-shell "tmux neww tmux-sessionizer -s 3"
