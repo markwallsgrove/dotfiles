@@ -1,0 +1,89 @@
+#!/usr/bin/env bash
+set -euo pipefail
+exec 2> /tmp/tmux-new-branch.log
+trap 'echo "" > /dev/tty; echo "ERROR: Command failed (exit $?). See /tmp/tmux-new-branch.log" > /dev/tty; read -n1 < /dev/tty' ERR
+
+# Step 1: Select project
+repo_dir=$(find ~/projects -maxdepth 5 -name ".git" -type d \
+    -not -path "*/node_modules/*" \
+    -not -path "*/.worktrees/*" \
+    -not -path "*/vendor/*" \
+    2>/dev/null \
+    | sed 's|/\.git$||' \
+    | sort \
+    | fzf --prompt="Select project: " --height=40% --reverse) || true
+
+if [[ -z "$repo_dir" ]]; then
+    exit 0
+fi
+
+# Step 2: Fetch + select base branch
+git -C "$repo_dir" fetch --quiet 2>/dev/null || true
+
+base_branch=$({
+    git -C "$repo_dir" branch --format='%(refname:short)' 2>/dev/null
+    git -C "$repo_dir" branch -r --format='%(refname:short)' 2>/dev/null \
+        | grep -v '^[^/]*/HEAD$' \
+        | grep -v '^[^/]*$' \
+        | sed 's|^[^/]*/||'
+} | sort -u | fzf --prompt="Select base branch: " --height=40% --reverse) || true
+
+if [[ -z "$base_branch" ]]; then
+    exit 0
+fi
+
+if ! git -C "$repo_dir" show-ref --verify --quiet "refs/heads/$base_branch" \
+    && ! git -C "$repo_dir" show-ref --verify --quiet "refs/remotes/origin/$base_branch"; then
+    echo "ERROR: Base branch '$base_branch' does not exist" > /dev/tty
+    echo "Press any key to close..." > /dev/tty
+    read -n1 < /dev/tty
+    exit 1
+fi
+
+# Step 3: Enter new branch name (or select existing)
+fzf_output=$({
+    git -C "$repo_dir" branch --format='%(refname:short)' 2>/dev/null
+    git -C "$repo_dir" branch -r --format='%(refname:short)' 2>/dev/null \
+        | grep -v '^[^/]*/HEAD$' \
+        | grep -v '^[^/]*$' \
+        | sed 's|^[^/]*/||'
+} | sort -u | fzf --print-query --prompt="New branch name: " --height=40% --reverse 2>&1) || true
+
+query=$(echo "$fzf_output" | sed -n '1p')
+match=$(echo "$fzf_output" | sed -n '2p')
+
+branch="${match:-$query}"
+
+if [[ -z "$branch" ]]; then
+    exit 0
+fi
+
+# Step 4: Create worktree + session
+# Check if branch already has a worktree
+worktree_path=$(git -C "$repo_dir" worktree list --porcelain \
+    | awk -v branch="refs/heads/$branch" '
+        /^worktree /{ wt = substr($0, 10) }
+        /^branch /{ if (substr($0, 8) == branch) print wt }
+    ')
+
+if [[ -n "$worktree_path" ]]; then
+    zoxide add "$worktree_path"
+    exec tmux-sessionizer "$worktree_path"
+fi
+
+# Create new worktree
+repo_name=$(basename "$repo_dir")
+parent_dir=$(dirname "$repo_dir")
+branch_dir_name="${branch//\//-}"
+worktree_dest="$parent_dir/.worktrees/$repo_name/$branch_dir_name"
+
+if git -C "$repo_dir" show-ref --verify --quiet "refs/heads/$branch"; then
+    git -C "$repo_dir" worktree add "$worktree_dest" "$branch"
+elif git -C "$repo_dir" show-ref --verify --quiet "refs/remotes/origin/$branch"; then
+    git -C "$repo_dir" worktree add --track -b "$branch" "$worktree_dest" "origin/$branch"
+else
+    git -C "$repo_dir" worktree add -b "$branch" "$worktree_dest" "$base_branch"
+fi
+
+zoxide add "$worktree_dest"
+exec tmux-sessionizer "$worktree_dest"

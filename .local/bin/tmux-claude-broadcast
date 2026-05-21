@@ -1,0 +1,130 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+attention_dir="/tmp/claude-attention"
+state_file="/tmp/claude-broadcast-deselected"
+
+# Gather all claude panes
+panes=$(tmux list-panes -a -F '#{pane_id}|#{session_name}|#{window_name}|#{pane_current_command}' \
+    | grep '|claude-chill$') || true
+
+if [[ -z "$panes" ]]; then
+    echo "No Claude instances found."
+    read -r -n 1
+    exit 0
+fi
+
+# Load previously deselected identifiers
+declare -A deselected_map
+if [[ -f "$state_file" ]]; then
+    while IFS= read -r ident; do
+        [[ -n "$ident" ]] && deselected_map["$ident"]=1
+    done < "$state_file"
+fi
+
+now=$(date +%s)
+entries=()
+
+while IFS='|' read -r pane_id session window _cmd; do
+    attention_file="${attention_dir}/${pane_id}"
+    if [[ -f "$attention_file" ]]; then
+        ts=$(cat "$attention_file")
+        age=$(( (now - ts) / 60 ))
+        entries+=("! ${session} > ${window}|${pane_id}|(${age}m ago)")
+    else
+        entries+=("  ${session} > ${window}|${pane_id}|")
+    fi
+done <<< "$panes"
+
+# Sort: attention (!) first
+sorted=$(printf '%s\n' "${entries[@]}" | sort -r)
+
+# Format for fzf and track line positions for deselection
+fzf_input=""
+line_num=0
+deselect_positions=()
+# Maps line_num -> stable identifier for saving state later
+declare -A line_idents
+# All identifiers in display order
+all_idents=()
+
+while IFS='|' read -r label target age; do
+    line_num=$((line_num + 1))
+    # Extract stable identifier (strip leading ! or spaces from label)
+    ident=$(printf '%s' "$label" | sed 's/^[! ]*//')
+    all_idents+=("$ident")
+    line_idents[$line_num]="$ident"
+
+    if [[ -n "${deselected_map[$ident]:-}" ]]; then
+        deselect_positions+=("$line_num")
+    fi
+
+    age_trimmed=$(printf '%s' "$age" | tr -d '[:space:]')
+    if [[ -n "$age_trimmed" ]]; then
+        fzf_input+="${label}  ${age}"$'\t'"${target}"$'\n'
+    else
+        fzf_input+="${label}"$'\t'"${target}"$'\n'
+    fi
+done <<< "$sorted"
+
+# Build fzf bind: select all, then deselect remembered items
+bind_actions="select-all"
+for pos in "${deselect_positions[@]}"; do
+    bind_actions+="+pos(${pos})+toggle"
+done
+
+# Step 1: Multi-select Claude instances
+selected=$(printf '%s' "$fzf_input" \
+    | fzf --multi \
+        --with-nth=1 --delimiter=$'\t' \
+        --prompt="Select Claude instances> " \
+        --header="TAB = toggle | ENTER = confirm selection" \
+        --bind "load:${bind_actions}" \
+        --preview='tmux capture-pane -t {2} -p -S -100 | tail -40' \
+        --preview-window=right:50%:follow) || true
+
+[[ -z "$selected" ]] && exit 0
+
+# Extract pane IDs and selected identifiers
+pane_ids=()
+declare -A selected_idents
+while IFS= read -r line; do
+    id=$(printf '%s' "$line" | awk -F$'\t' '{print $2}' | tr -d ' ')
+    pane_ids+=("$id")
+    # Extract stable identifier from display portion
+    label=$(printf '%s' "$line" | awk -F$'\t' '{print $1}')
+    ident=$(printf '%s' "$label" | sed 's/^[! ]*//' | sed 's/  *(.*//')
+    selected_idents["$ident"]=1
+done <<< "$selected"
+
+# Save deselected state for next run
+> "$state_file"
+for ident in "${all_idents[@]}"; do
+    if [[ -z "${selected_idents[$ident]:-}" ]]; then
+        printf '%s\n' "$ident" >> "$state_file"
+    fi
+done
+
+count=${#pane_ids[@]}
+
+# Step 2: Prompt for broadcast message
+echo ""
+echo "Broadcasting to ${count} instance(s)"
+read -e -r -p "Message: " msg
+
+if [[ -z "$msg" ]]; then
+    echo "Aborted."
+    exit 0
+fi
+
+# Send message to each selected pane
+for pane_id in "${pane_ids[@]}"; do
+    if tmux send-keys -t "$pane_id" "$msg" Enter 2>/dev/null; then
+        echo "  sent -> ${pane_id}"
+    else
+        echo "  FAILED -> ${pane_id}"
+    fi
+done
+
+echo "Sent to ${count} instance(s)."
+sleep 2

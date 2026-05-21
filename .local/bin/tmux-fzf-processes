@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+# List all processes in all tmux panes and switch to the selected one
+
+set -euo pipefail
+
+# Recursively get all descendant process commands for a PID
+get_descendants() {
+  local pid=$1
+  local child_pids
+  child_pids=$(ps -eo pid=,ppid= | awk -v p="$pid" '$2==p {print $1}')
+  [[ -z "$child_pids" ]] && return
+
+  local names=()
+  for cpid in $child_pids; do
+    local name
+    name=$(ps -o comm= -p "$cpid" 2>/dev/null) || continue
+    name=$(basename "$name")
+    # Recurse into grandchildren
+    local grandchildren
+    grandchildren=$(get_descendants "$cpid") || true
+    if [[ -n "$grandchildren" ]]; then
+      names+=("$grandchildren")
+    else
+      names+=("$name")
+    fi
+  done
+  (IFS=','; echo "${names[*]}")
+}
+
+# Collect pane info with processes
+list_pane_processes() {
+  tmux list-panes -a -F '#{session_name}:#{window_index}.#{pane_index} #{pane_pid} #{session_name} #{window_name}' |
+  while read -r target pane_pid session window; do
+    procs=$(get_descendants "$pane_pid")
+    if [[ -z "$procs" ]]; then
+      procs=$(tmux display-message -t "$target" -p '#{pane_current_command}')
+    fi
+    printf "%-30s %-15s %-15s %s\n" "$target" "$session" "$window" "$procs"
+  done
+}
+
+selected=$(
+  list_pane_processes |
+  fzf --header="TARGET                         SESSION         WINDOW          PROCESSES" \
+      --preview='tmux capture-pane -t {1} -p -e' \
+      --preview-window=right:60% \
+      --reverse
+) || exit 0
+
+target=$(echo "$selected" | awk '{print $1}')
+tmux switch-client -t "$target"

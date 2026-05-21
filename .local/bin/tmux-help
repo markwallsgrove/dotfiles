@@ -1,0 +1,96 @@
+#!/usr/bin/env bash
+# Display all tmux keybindings with fuzzy search
+# Custom bindings from .tmux.conf show their inline comment as description
+# Default bindings show the tmux command
+
+set -euo pipefail
+
+conf="${HOME}/.tmux.conf"
+prefix=$(tmux show-option -gv prefix 2>/dev/null || echo "C-b")
+
+# Build a map of custom descriptions from .tmux.conf comments
+# Key format: "table:key" -> description
+declare -A custom_desc
+if [[ -f "$conf" ]]; then
+  while IFS= read -r line; do
+    [[ "$line" =~ \# ]] || continue
+    desc="${line##*# }"
+
+    tokens=($line)
+    i=1
+    table="prefix"
+    while (( i < ${#tokens[@]} )); do
+      tok="${tokens[$i]}"
+      case "$tok" in
+        -n) table="root"; ((i++)) ;;
+        -r) ((i++)) ;;
+        -T) table="${tokens[$((i+1))]}"; ((i+=2)) ;;
+        -?*) ((i++)) ;;
+        *) break ;;
+      esac
+    done
+    key="${tokens[$i]:-}"
+    [[ -n "$key" ]] && custom_desc["${table}:${key}"]="$desc"
+  done < <(grep -E '^bind(-key)?\s' "$conf" | grep '#')
+fi
+
+# Parse all active bindings from tmux, skip mouse and copy-mode bindings
+list_all_bindings() {
+  tmux list-keys 2>/dev/null | while IFS= read -r line; do
+    # Skip mouse bindings
+    [[ "$line" =~ Mouse ]] && continue
+    # Skip copy-mode bindings
+    [[ "$line" =~ copy-mode ]] && continue
+    # Skip scroll bindings
+    [[ "$line" =~ Scrollbar ]] && continue
+
+    # Parse: bind-key [-r] -T <table> <key> <command...>
+    tokens=($line)
+    i=1
+    table=""
+    while (( i < ${#tokens[@]} )); do
+      tok="${tokens[$i]}"
+      case "$tok" in
+        -r|-a) ((i++)) ;;
+        -T) table="${tokens[$((i+1))]}"; ((i+=2)) ;;
+        -*) ((i++)) ;;
+        *) break ;;
+      esac
+    done
+
+    key="${tokens[$i]:-}"
+    [[ -z "$key" ]] && continue
+
+    # Build the command (everything after the key)
+    cmd="${tokens[*]:$((i+1))}"
+
+    # Determine display prefix
+    case "$table" in
+      prefix) display_key="${prefix} ${key}" ;;
+      root)   display_key="${key}" ;;
+      *)      continue ;;
+    esac
+
+    # Use custom description if available, otherwise use the command
+    lookup="${table}:${key}"
+    if [[ -n "${custom_desc[$lookup]:-}" ]]; then
+      desc="${custom_desc[$lookup]}"
+    else
+      desc="$cmd"
+    fi
+
+    # Truncate long descriptions
+    if (( ${#desc} > 60 )); then
+      desc="${desc:0:57}..."
+    fi
+    printf "%-25s %s\n" "$display_key" "$desc"
+  done
+}
+
+list_all_bindings | sort -u | fzf \
+  --header="KEYBINDING                DESCRIPTION" \
+  --header-first \
+  --footer="prefix: ${prefix}" \
+  --reverse \
+  --prompt="Search: " \
+  > /dev/null || true

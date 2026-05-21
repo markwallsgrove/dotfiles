@@ -1,0 +1,124 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SNIPPETS_DIR="${HOME}/.config/snippets"
+mkdir -p "$SNIPPETS_DIR"
+
+list_snippets() {
+  find "$SNIPPETS_DIR" -maxdepth 1 -type f -print0 2>/dev/null |
+    sort -z |
+    xargs -0 -I{} basename "{}"
+}
+
+# Show first line of snippet as fzf entry, full content in preview
+fzf_list() {
+  for f in "$SNIPPETS_DIR"/*; do
+    [[ -f "$f" ]] || continue
+    local name
+    name=$(basename "$f")
+    local first_line
+    first_line=$(head -1 "$f")
+    printf '%s\t%s\n' "$name" "$first_line"
+  done
+}
+
+preview_cmd="cat '${SNIPPETS_DIR}/{1}'"
+
+target_pane="${1:-}"
+
+mode=0  # 0=Paste, 1=Add, 2=Edit, 3=Delete
+
+while true; do
+  # Build the fzf entry list: filename<tab>first_line
+  entries=""
+  for f in "$SNIPPETS_DIR"/*; do
+    [[ -f "$f" ]] || continue
+    name=$(basename "$f")
+    first_line=$(head -1 "$f")
+    entries+="${name}"$'\t'"${first_line}"$'\n'
+  done
+
+  case $mode in
+    0) # Paste
+      selected=$(
+        printf '%s' "$entries" |
+          fzf --expect=tab \
+              --delimiter=$'\t' \
+              --with-nth=2.. \
+              --header="[PASTE] Tab=cycle mode | Enter=paste" \
+              --preview="cat '${SNIPPETS_DIR}/{1}'" \
+              --preview-window=right:60%:wrap \
+              --prompt="Paste> " || true
+      )
+      [[ -z "$selected" ]] && exit 0
+      key=$(head -1 <<< "$selected")
+      choice=$(tail -n +2 <<< "$selected" | cut -f1)
+      if [[ "$key" == "tab" ]]; then
+        mode=1; continue
+      fi
+      [[ -z "$choice" ]] && exit 0
+      snippet_file="${SNIPPETS_DIR}/${choice}"
+      [[ -f "$snippet_file" ]] || exit 1
+      if [[ -n "$target_pane" ]]; then
+        tmux load-buffer -b snippet "$snippet_file"
+      else
+        cat "$snippet_file"
+      fi
+      exit 0
+      ;;
+
+    1) # Add
+      snippet_file="${SNIPPETS_DIR}/$(date +%s%N)"
+      nvim "$snippet_file"
+      # Remove if user saved empty file
+      if [[ -f "$snippet_file" ]] && [[ ! -s "$snippet_file" ]]; then
+        rm -f "$snippet_file"
+      fi
+      mode=2; continue
+      ;;
+
+    2) # Edit
+      selected=$(
+        printf '%s' "$entries" |
+          fzf --expect=tab \
+              --delimiter=$'\t' \
+              --with-nth=2.. \
+              --header="[EDIT] Tab=cycle mode | Enter=edit" \
+              --preview="cat '${SNIPPETS_DIR}/{1}'" \
+              --preview-window=right:60%:wrap \
+              --prompt="Edit> " || true
+      )
+      [[ -z "$selected" ]] && exit 0
+      key=$(head -1 <<< "$selected")
+      choice=$(tail -n +2 <<< "$selected" | cut -f1)
+      if [[ "$key" == "tab" ]]; then
+        mode=3; continue
+      fi
+      [[ -z "$choice" ]] && continue
+      nvim "${SNIPPETS_DIR}/${choice}"
+      continue
+      ;;
+
+    3) # Delete
+      selected=$(
+        printf '%s' "$entries" |
+          fzf --expect=tab \
+              --delimiter=$'\t' \
+              --with-nth=2.. \
+              --header="[DELETE] Tab=cycle mode | Enter=delete" \
+              --preview="cat '${SNIPPETS_DIR}/{1}'" \
+              --preview-window=right:60%:wrap \
+              --prompt="Delete> " || true
+      )
+      [[ -z "$selected" ]] && exit 0
+      key=$(head -1 <<< "$selected")
+      choice=$(tail -n +2 <<< "$selected" | cut -f1)
+      if [[ "$key" == "tab" ]]; then
+        mode=0; continue
+      fi
+      [[ -z "$choice" ]] && continue
+      rm -f "${SNIPPETS_DIR}/${choice}"
+      continue
+      ;;
+  esac
+done
