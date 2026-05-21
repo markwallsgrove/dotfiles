@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+dir=/tmp/claude-attention
+[[ -d "$dir" ]] || exit 0
+live=$(tmux list-panes -a -F '#{pane_id}|#{pane_current_command}' 2>/dev/null | grep '|claude$' | cut -d'|' -f1) || exit 0
+for f in "$dir"/%*; do
+    [[ -f "$f" ]] || continue
+    printf '%s\n' "$live" | grep -qxF "$(basename "$f")" && printf '🤖' && exit 0
+done

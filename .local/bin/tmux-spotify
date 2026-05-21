@@ -1,0 +1,9 @@
+#!/bin/bash
+if pgrep -x "Spotify" > /dev/null; then
+  state=$(osascript -e 'tell application "Spotify" to player state as string' 2>/dev/null)
+  if [ "$state" = "playing" ]; then
+    artist=$(osascript -e 'tell application "Spotify" to artist of current track' 2>/dev/null)
+    track=$(osascript -e 'tell application "Spotify" to name of current track' 2>/dev/null)
+    echo "♫ ${artist} - ${track} "
+  fi
+fi
