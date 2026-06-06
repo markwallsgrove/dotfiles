@@ -1,0 +1,6 @@
+#!/bin/bash
+# Sync git repos and worktrees to zoxide database
+export PATH="/opt/homebrew/bin:$PATH"
+find "$HOME/projects" -name .git \( -type d -o -type f \) -execdir pwd \; 2>/dev/null | sort -u | while read -r dir; do
+  zoxide add "$dir"
+done

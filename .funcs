@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 refresh_codeartifact() {
-    aws sso login
+    aws sts get-caller-identity &>/dev/null || aws sso login
     aws codeartifact login \
         --tool pip \
         --repository pypi \
@@ -29,7 +29,7 @@ refresh_poetry() {
     # Refresh Poetry credentials for CodeArtifact
     # Optionally pass --sso to also run aws sso login first
     if [[ "$1" == "--sso" ]]; then
-        aws sso login || { echo "SSO login failed" >&2; return 1; }
+        aws sts get-caller-identity &>/dev/null || aws sso login || { echo "SSO login failed" >&2; return 1; }
     fi
 
     local token
@@ -52,6 +52,28 @@ authentik-portfoward() {
 unalias gwt 2>/dev/null
 gwt() {
     local main_worktree
+    local base_ref="main"
+
+    while [[ "${1-}" == -* ]]; do
+        case "$1" in
+            -b)
+                if [[ -z "${2-}" ]]; then
+                    echo "gwt: -b requires a directory argument" >&2
+                    return 1
+                fi
+                base_ref=$(git -C "$2" rev-parse --abbrev-ref HEAD 2>/dev/null)
+                if [[ -z "$base_ref" || "$base_ref" == "HEAD" ]]; then
+                    echo "gwt: '$2' is not on a branch (detached HEAD or not a git repo)" >&2
+                    return 1
+                fi
+                shift 2
+                ;;
+            *)
+                echo "gwt: unknown flag $1" >&2
+                return 1
+                ;;
+        esac
+    done
 
     if ! git rev-parse --git-dir >/dev/null 2>&1; then
         local repo_dir
@@ -122,7 +144,7 @@ gwt() {
     elif git -C "$main_worktree" show-ref --verify --quiet "refs/remotes/origin/$branch"; then
         git -C "$main_worktree" worktree add --track -b "$branch" "$worktree_dest" "origin/$branch"
     else
-        git -C "$main_worktree" worktree add -b "$branch" "$worktree_dest" main
+        git -C "$main_worktree" worktree add -b "$branch" "$worktree_dest" "$base_ref"
     fi
 
     if [[ $? -ne 0 ]]; then
@@ -133,6 +155,7 @@ gwt() {
     echo "gwt: created worktree at $worktree_dest"
     builtin cd "$worktree_dest"
     zoxide add "$worktree_dest"
+    mise trust "$worktree_dest"
 }
 
 wcd() {

@@ -99,7 +99,8 @@ alias screenshot-area="grim -g \"\$(slurp)\" - | swappy -f -"
 
 alias viewS3=stu
 
-alias claude="claude-chill /opt/homebrew/bin/claude"
+# alias claude="claude-chill /opt/homebrew/bin/claude"
 
 alias recreateAuthentikNamespace="kubectl delete namespace authentik --wait=true && kubectl create namespace authentik"
 alias killTilt="pkill -f 'tilt up'"
+alias openPr="gh pr view --web"

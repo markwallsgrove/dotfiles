@@ -23,6 +23,7 @@ if [[ "${1:-}" == "--continue" ]]; then
     # ── Phase 6: Claude discussion ───────────────────────────────────────
     log "Phase 6: Claude discussion (worktree: $worktree_dest)"
     builtin cd "$worktree_dest"
+    mise trust --quiet 2>/dev/null || true
     claude "$(cat "${context_file}")
 
 ---

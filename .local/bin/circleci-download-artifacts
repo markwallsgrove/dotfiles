@@ -1,0 +1,136 @@
+#!/usr/bin/env bash
+
+# Check if verbose flag is present and set appropriate bash options
+if [[ "$*" == *"-v"* || "$*" == *"--verbose"* ]]; then
+    set -euxo pipefail
+else
+    set -euo pipefail
+fi
+
+# Function to display help
+show_help() {
+    cat << EOF
+Usage: $0 [OPTIONS] <project> <job_id>
+Download all artifacts from a CircleCI job.
+Arguments:
+    project   Project name (e.g., linq-workflow)
+    job_id    Job ID number (e.g., 2832)
+Options:
+    -p, --parallel N   Max parallel downloads (default: 10)
+    -v, --verbose      Enable verbose output for curl commands
+    -h, --help         Show this help message
+Environment Variables:
+    CIRCLE_TOKEN   CircleCI API token (required)
+Examples:
+    $0 linq-workflow 2832
+    $0 --verbose my-project 1234
+    $0 -p 20 linq-frontend 112332
+EOF
+}
+
+# Initialize variables
+VERBOSE=false
+PARALLEL_MAX=10
+PROJECT=""
+JOB_ID=""
+
+# Parse command line arguments
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        -v|--verbose)
+            VERBOSE=true
+            shift
+            ;;
+        -p|--parallel)
+            PARALLEL_MAX="$2"
+            shift 2
+            ;;
+        -h|--help)
+            show_help
+            exit 0
+            ;;
+        *)
+            if [[ -z "$PROJECT" ]]; then
+                PROJECT="$1"
+            elif [[ -z "$JOB_ID" ]]; then
+                JOB_ID="$1"
+            else
+                echo "Error: Too many arguments" >&2
+                show_help
+                exit 1
+            fi
+            shift
+            ;;
+    esac
+done
+
+# Validate CIRCLE_TOKEN
+if [[ -z "${CIRCLE_TOKEN:-}" ]]; then
+    echo "Error: CIRCLE_TOKEN environment variable is not set" >&2
+    exit 1
+fi
+
+# Validate that both arguments are provided
+if [[ -z "$PROJECT" || -z "$JOB_ID" ]]; then
+    echo "Error: Both project and job_id are required" >&2
+    show_help
+    exit 1
+fi
+
+# Set curl verbosity flag
+CURL_VERBOSE="-s"
+if [[ "$VERBOSE" == true ]]; then
+    CURL_VERBOSE="-v"
+fi
+
+# Fetch artifact list
+api_url="https://circleci.com/api/v1.1/project/github/automata-tech/$PROJECT/$JOB_ID/artifacts"
+artifacts=$(curl -H "Circle-Token: $CIRCLE_TOKEN" $CURL_VERBOSE "$api_url")
+curl_exit=$?
+
+if [[ $curl_exit -ne 0 ]]; then
+    echo "Error: curl failed (exit $curl_exit) fetching $api_url" >&2
+    exit 1
+fi
+
+if ! echo "$artifacts" | jq -e 'type == "array"' > /dev/null 2>&1; then
+    echo "Error: API returned unexpected response from $api_url:" >&2
+    echo "$artifacts" >&2
+    exit 1
+fi
+
+count=$(echo "$artifacts" | jq 'length')
+if [[ "$count" -eq 0 ]]; then
+    echo "No artifacts found for $PROJECT/$JOB_ID"
+    exit 0
+fi
+
+echo "Downloading $count artifact(s) (max $PARALLEL_MAX parallel)..."
+
+# Pass 1: Validate paths and create directories
+curl_args=()
+while read -r path url; do
+    # Security check: ensure path doesn't contain dangerous patterns
+    if [[ "$path" == *".."* || "$path" == "/"* || "$path" == *"~"* || "$path" == *'$'* ]]; then
+        echo "✗ Security Error: Path contains dangerous patterns: $path" >&2
+        exit 1
+    fi
+
+    # Create directory and verify path stays within current directory
+    mkdir -p "$(dirname "$path")"
+    clean_path="$(cd "$(dirname "$path")" && pwd -P)/$(basename "$path")"
+    current_dir=$(pwd -P)
+
+    if [[ "$clean_path" != "$current_dir"* ]]; then
+        echo "✗ Security Error: Path would write outside current directory: $path" >&2
+        exit 1
+    fi
+
+    curl_args+=(-o "$path" -f -L "${url}?circle-token=${CIRCLE_TOKEN}")
+done < <(echo "$artifacts" | jq -r '.[] | "\(.path) \(.url)"')
+
+# Pass 2: Download all artifacts in parallel
+curl -Z --parallel-max "$PARALLEL_MAX" --progress-bar "${curl_args[@]}"
+
+echo ""
+echo "✓ Downloaded $count artifact(s)"
