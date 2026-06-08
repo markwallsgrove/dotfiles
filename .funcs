@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 
+# Authenticates pip to the Automata CodeArtifact private PyPI and stores the token in keyring; run before installing private packages.
 refresh_codeartifact() {
     aws sts get-caller-identity &>/dev/null || aws sso login
     aws codeartifact login \
@@ -25,9 +26,8 @@ refresh_codeartifact() {
     #    --output text | keyring set https://automata-401732561735.d.codeartifact.eu-west-1.amazonaws.com/pypi/pypi/simple/ aws
 }
 
+# Exports Poetry HTTP basic auth env vars for the Automata CodeArtifact private PyPI; pass --sso to trigger aws sso login first.
 refresh_poetry() {
-    # Refresh Poetry credentials for CodeArtifact
-    # Optionally pass --sso to also run aws sso login first
     if [[ "$1" == "--sso" ]]; then
         aws sts get-caller-identity &>/dev/null || aws sso login || { echo "SSO login failed" >&2; return 1; }
     fi
@@ -44,11 +44,13 @@ refresh_poetry() {
     export POETRY_HTTP_BASIC_AUTOMATA_PASSWORD="$token"
 }
 
+# Port-forwards the Authentik identity provider server pod to localhost:9443 for local UI access.
 authentik-portfoward() {
     server=$(kubectl get pods -n authentik | awk '/server/ { print $1 }')
     kubectl port-forward -n authentik pod/$server 9443:9443
 }
 
+# Creates or switches to a git worktree for a branch at ../.worktrees/<repo>/<branch>; uses fzf to pick repo/branch if omitted. Pass -b <dir> to set the base branch.
 unalias gwt 2>/dev/null
 gwt() {
     local main_worktree
@@ -158,6 +160,7 @@ gwt() {
     mise trust "$worktree_dest"
 }
 
+# Navigates to an automata-tech worktree via fzf; faster alternative to gwt when the worktree already exists.
 wcd() {
     local base=~/projects/github/automata-tech/.worktrees
     local selection

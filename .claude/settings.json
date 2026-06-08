@@ -1,0 +1,122 @@
+{
+  "permissions": {
+    "allow": [
+      "Read",
+      "Grep",
+      "Glob",
+      "Bash(ls *)",
+      "Bash(cat *)",
+      "Bash(head *)",
+      "Bash(tail *)",
+      "Bash(find *)",
+      "Bash(rg *)",
+      "Bash(grep *)",
+      "Bash(wc *)",
+      "Bash(file *)",
+      "Bash(cd *)",
+      "Bash(which *)",
+      "Bash(ps *)",
+      "Bash(echo *)",
+      "Bash(diff *)",
+      "Bash(tree *)",
+      "Bash(pwd *)",
+      "Bash(env *)",
+      "Bash(printenv *)",
+      "Bash(python *)",
+      "Bash(python3 *)",
+      "Bash(source *)",
+      "Bash(builtin *)",
+      "Bash(uv *)",
+      "Bash(make *)",
+      "Bash(mise *)",
+      "Bash(gh *)",
+      "Bash(kubectl *)",
+      "Bash(docker *)",
+      "Bash(helm *)",
+      "Bash(pnpm *)",
+      "Bash(npm *)",
+      "Bash(npx *)",
+      "Bash(node *)",
+      "Bash(go *)",
+      "Bash(pip *)",
+      "Bash(pip3 *)",
+      "Bash(poetry *)",
+      "Bash(pre-commit *)",
+      "Bash(git *)",
+      "Bash(mkdir *)",
+      "Bash(cp *)",
+      "Bash(mv *)",
+      "Bash(ln *)",
+      "Bash(chmod *)",
+      "Bash(jq *)",
+      "Bash(curl *)",
+      "Bash(tilt *)",
+      "Bash(circleci *)",
+      "Bash(sed *)",
+      "Bash(awk *)",
+      "Bash(sort *)",
+      "Bash(uniq *)",
+      "Bash(xargs *)",
+      "Bash(timeout *)"
+    ],
+    "defaultMode": "auto"
+  },
+  "hooks": {
+    "Notification": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "mkdir -p /tmp/claude-attention && printf '%s' \"$(date +%s)\" > \"/tmp/claude-attention/${TMUX_PANE}\" && tmux set-option -t \"${TMUX_PANE}\" -p @claude_attention 1 2>/dev/null; tmux run-shell 'printf \"\\a\"' 2>/dev/null; true"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "rm -f \"/tmp/claude-attention/${TMUX_PANE}\" && tmux set-option -t \"${TMUX_PANE}\" -p -u @claude_attention 2>/dev/null; true"
+          }
+        ]
+      },
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "jq -c '{ts: (now | todate), tool: .tool_name, input: .tool_input}' >> ~/.claude/permission-audit.jsonl; true"
+          }
+        ]
+      }
+    ]
+  },
+  "statusLine": {
+    "type": "command",
+    "command": "~/.claude/statusline.sh"
+  },
+  "enabledPlugins": {
+    "gopls-lsp@claude-plugins-official": true,
+    "swift-lsp@claude-plugins-official": false,
+    "clangd-lsp@claude-plugins-official": true,
+    "caveman@caveman": false,
+    "pyright-lsp@claude-plugins-official": true
+  },
+  "extraKnownMarketplaces": {
+    "caveman": {
+      "source": {
+        "source": "github",
+        "repo": "JuliusBrussee/caveman"
+      }
+    }
+  },
+  "alwaysThinkingEnabled": true,
+  "skipDangerousModePermissionPrompt": true,
+  "editorMode": "vim",
+  "verbose": true,
+  "skipAutoPermissionPrompt": true,
+  "voiceEnabled": true
+}
