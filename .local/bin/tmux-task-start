@@ -5,119 +5,12 @@ trap 'echo "" > /dev/tty; echo "ERROR: Command failed (exit $?). See /tmp/tmux-t
 
 log() { echo "[$(date '+%H:%M:%S')] $*" >&2; }
 
-# ── Continue path: runs inside a tmux session pane ───────────────────────────
-if [[ "${1:-}" == "--continue" ]]; then
-    TASK_SLUG="${2:?missing TASK_SLUG}"
-    worktree_dest="${3:?missing worktree_dest}"
-    repo_dir="${4:?missing repo_dir}"
+outcome_file="/tmp/task-outcome-$$.yaml"
+rm -f "$outcome_file"
 
-    context_file="/tmp/task-context-${TASK_SLUG}.txt"
-    outcome_file="/tmp/task-outcome-${TASK_SLUG}.yaml"
-    TASK_TITLE=$(cat "$context_file" 2>/dev/null || echo "$TASK_SLUG")
-    rm -f "$outcome_file"
+# ── Phase 1: Repo picker ─────────────────────────────────────────────────────
 
-    # ── Phase 6: Claude discussion ───────────────────────────────────────
-    log "Phase 6: Claude discussion (worktree: $worktree_dest)"
-    builtin cd "$worktree_dest"
-    mise trust --quiet 2>/dev/null || true
-    claude "Task: ${TASK_TITLE}
-
----
-
-IMPORTANT RULES:
-1. This is a DISCUSSION ONLY. Do NOT implement anything. Do NOT create or modify any files in the project.
-2. Discuss the task with me: ask clarifying questions, suggest an approach, and refine the requirements.
-3. Keep everything HIGH LEVEL and CONCEPTUAL. No code, no file paths, no function names, no implementation details. Think product/design level, not engineering level.
-4. You SHOULD read and explore the codebase to understand what already exists. Do NOT ask the user about what exists — find out yourself. Use this understanding to inform the discussion, but keep your responses conceptual.
-5. When I say we are done discussing, write ONLY the YAML outcome file below and nothing else. The output must also be high level and conceptual — no code references.
-
-When discussion is complete, write a YAML file to ${outcome_file} with these fields:
-
-proceed: true
-refined_description: |
-  full updated task description
-acceptance_criteria: |
-  acceptance criteria
-implementation_notes: |
-  implementation notes
-
-Then tell me you are done and I should close this popup."
-    log "Claude discussion finished"
-
-    # ── Phase 7: Outcome check ───────────────────────────────────────────
-    log "Phase 7: Outcome check"
-    if [[ ! -f "$outcome_file" ]]; then
-        log "No outcome file found at $outcome_file"
-        echo "No outcome file found. Exiting."
-        sleep 2
-        exit 0
-    fi
-
-    log "Outcome file found: $(cat "$outcome_file")"
-    proceed=$(yq eval '.proceed' "$outcome_file")
-    log "Proceed: $proceed"
-    if [[ "$proceed" != "true" ]]; then
-        log "proceed=false, exiting"
-        echo "Outcome: proceed=false. Exiting."
-        sleep 2
-        exit 0
-    fi
-
-    refined_description=$(yq eval '.refined_description' "$outcome_file")
-    implementation_notes=$(yq eval '.implementation_notes' "$outcome_file")
-    acceptance_criteria=$(yq eval '.acceptance_criteria' "$outcome_file")
-
-    # ── Phase 8: Bootstrap + exec claude ─────────────────────────────────
-    log "Phase 8: Bootstrap + exec claude"
-
-    prompt="Task: ${TASK_TITLE}
-
-Description:
-${refined_description}
-
-Implementation notes:
-${implementation_notes}
-
-Acceptance criteria:
-${acceptance_criteria}
-
-Instructions:
-1. Review the codebase and the description above to understand the task
-2. Ask clarifying questions if anything is ambiguous
-3. Write tests first, then implement the change
-4. Run all checks (linting, formatting, type checking, and tests) and ensure they all pass
-5. Create a PR, push the code, and open the PR in the browser"
-
-    rm -f "$context_file" "$outcome_file"
-    log "Cleaned up temp files, exec-ing claude"
-    exec claude "$prompt"
-fi
-
-# ── Popup path: quick fzf selections ────────────────────────────────────────
-
-# ── Phase 1: Task title ──────────────────────────────────────────────────────
-
-log "Phase 1: Task title"
-task_title=$(</dev/null fzf \
-    --print-query \
-    --prompt="Task title: " \
-    --height=20% --reverse 2>/dev/null | head -1) || true
-
-if [[ -z "$task_title" ]]; then
-    log "No title entered, exiting"
-    exit 0
-fi
-
-task_slug=$(printf '%s' "$task_title" | tr '[:upper:]' '[:lower:]' | tr -cs 'a-z0-9' '-' | sed 's/^-//;s/-$//')
-log "Task title: $task_title slug: $task_slug"
-
-context_file="/tmp/task-context-${task_slug}.txt"
-printf '%s' "$task_title" > "$context_file"
-log "Context file written: $context_file"
-
-# ── Phase 2: Repo picker ─────────────────────────────────────────────────────
-
-log "Phase 2: Repo picker"
+log "Phase 1: Repo picker"
 repo_dir=$(find ~/projects -maxdepth 5 -name ".git" -type d \
     -not -path "*/node_modules/*" \
     -not -path "*/.worktrees/*" \
@@ -133,9 +26,9 @@ if [[ -z "$repo_dir" ]]; then
 fi
 log "Selected repo: $repo_dir"
 
-# ── Phase 3: Fetch + base branch selection ────────────────────────────────────
+# ── Phase 2: Fetch + base branch selection ────────────────────────────────────
 
-log "Phase 3: Fetch + base branch"
+log "Phase 2: Fetch + base branch"
 git -C "$repo_dir" fetch --quiet 2>/dev/null || true
 
 base_branch=$({
@@ -152,9 +45,64 @@ if [[ -z "$base_branch" ]]; then
 fi
 log "Base branch: $base_branch"
 
-# ── Phase 4: Branch name + worktree creation ─────────────────────────────────
+# ── Phase 3: Claude discussion ───────────────────────────────────────────────
 
-log "Phase 4: Branch + worktree"
+log "Phase 3: Claude discussion (repo: $repo_dir)"
+builtin cd "$repo_dir"
+mise trust --quiet 2>/dev/null || true
+
+claude "IMPORTANT RULES:
+1. This is a DISCUSSION ONLY. Do NOT implement anything. Do NOT create or modify any files.
+2. Start by asking what the user is working on. Ask clarifying questions, suggest an approach, refine the requirements.
+3. Keep everything HIGH LEVEL and CONCEPTUAL. No code, no file paths, no function names, no implementation details.
+4. You SHOULD read and explore the codebase to understand what already exists. Use this to inform the discussion.
+5. When the user says we are done discussing, write ONLY the YAML outcome file and nothing else.
+
+When discussion is complete, write a YAML file to ${outcome_file}:
+
+proceed: true
+slug: short-kebab-case-identifier
+title: Human readable task title
+refined_description: |
+  full updated task description
+acceptance_criteria: |
+  acceptance criteria
+implementation_notes: |
+  implementation notes
+
+Then tell the user you are done and they should close this popup."
+
+log "Claude discussion finished"
+
+# ── Phase 4: Outcome check ───────────────────────────────────────────────────
+
+log "Phase 4: Outcome check"
+if [[ ! -f "$outcome_file" ]]; then
+    log "No outcome file found at $outcome_file"
+    echo "No outcome file found. Exiting."
+    sleep 2
+    exit 0
+fi
+
+proceed=$(yq eval '.proceed' "$outcome_file")
+if [[ "$proceed" != "true" ]]; then
+    log "proceed=false, exiting"
+    echo "Outcome: proceed=false. Exiting."
+    sleep 2
+    exit 0
+fi
+
+task_slug=$(yq eval '.slug' "$outcome_file")
+task_title=$(yq eval '.title' "$outcome_file")
+refined_description=$(yq eval '.refined_description' "$outcome_file")
+implementation_notes=$(yq eval '.implementation_notes' "$outcome_file")
+acceptance_criteria=$(yq eval '.acceptance_criteria' "$outcome_file")
+log "Slug: $task_slug title: $task_title"
+
+# ── Phase 5: Branch name + worktree creation ─────────────────────────────────
+
+log "Phase 5: Branch + worktree"
+repo_name=$(basename "$repo_dir")
 
 session_pattern="${task_slug//\//-}"
 matching_sessions=$(tmux list-sessions -F '#{session_name}' 2>/dev/null \
@@ -191,8 +139,6 @@ if [[ -z "$branch" ]]; then
     log "No branch name entered, exiting"
     exit 0
 fi
-
-repo_name=$(basename "$repo_dir")
 
 worktree_path=$(git -C "$repo_dir" worktree list --porcelain \
     | awk -v branch="refs/heads/$branch" '
@@ -235,10 +181,11 @@ fi
 
 log "Worktree dest: $worktree_dest"
 zoxide add "$worktree_dest"
+rm -f "$outcome_file"
 
-# ── Phase 5: Launch tmux session with --continue ─────────────────────────────
+# ── Phase 6: Launch tmux session ─────────────────────────────────────────────
 
-log "Phase 5: Launch tmux session"
+log "Phase 6: Launch tmux session"
 if [[ -n "${target_session:-}" ]]; then
     existing_session="$target_session"
 else
@@ -247,19 +194,40 @@ else
 fi
 log "Existing session search for '$task_slug': ${existing_session:-none}"
 
+prompt_file="/tmp/task-prompt-${task_slug}.txt"
+cat > "$prompt_file" <<PROMPT
+Task: ${task_title}
+
+Description:
+${refined_description}
+
+Implementation notes:
+${implementation_notes}
+
+Acceptance criteria:
+${acceptance_criteria}
+
+Instructions:
+1. Review the codebase and the description above to understand the task
+2. Ask clarifying questions if anything is ambiguous
+3. Write tests first, then implement the change
+4. Run all checks (linting, formatting, type checking, and tests) and ensure they all pass
+5. Create a PR, push the code, and open the PR in the browser
+PROMPT
+
 if [[ -n "$existing_session" ]]; then
     log "Adding window to existing session: $existing_session"
     tmux new-window -t "$existing_session" -n "$repo_name" -c "$worktree_dest"
     tmux split-window -t "$existing_session:$repo_name" -h -p 50 -c "$worktree_dest" \
-        "tmux-task-start --continue ${task_slug} ${worktree_dest} ${repo_dir}"
+        "claude \"\$(cat ${prompt_file})\"; rm -f ${prompt_file}"
     tmux select-pane -t "$existing_session:$repo_name.0"
     tmux switch-client -t "$existing_session:$repo_name" 2>/dev/null || true
 else
     log "Creating new session via tmux-sessionizer"
-    cat > "$worktree_dest/.tmux-sessionizer" <<HYDRATE
-tmux rename-window "${repo_name}"
-tmux split-window -h -p 50 "tmux-task-start --continue ${task_slug} ${worktree_dest} ${repo_dir}"
-HYDRATE
+    # shellcheck disable=SC2016
+    printf 'tmux rename-window "%s"\nclaude "$(cat %s)"\nrm -f %s\n' \
+        "$repo_name" "$prompt_file" "$prompt_file" \
+        > "$worktree_dest/.tmux-sessionizer"
     log "Hydrate hook written"
     exec tmux-sessionizer "$worktree_dest"
 fi
