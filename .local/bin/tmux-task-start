@@ -1,0 +1,265 @@
+#!/usr/bin/env bash
+set -euo pipefail
+exec 2> /tmp/tmux-task-start.log
+trap 'echo "" > /dev/tty; echo "ERROR: Command failed (exit $?). See /tmp/tmux-task-start.log" > /dev/tty; read -n1 < /dev/tty' ERR
+
+log() { echo "[$(date '+%H:%M:%S')] $*" >&2; }
+
+# ── Continue path: runs inside a tmux session pane ───────────────────────────
+if [[ "${1:-}" == "--continue" ]]; then
+    TASK_SLUG="${2:?missing TASK_SLUG}"
+    worktree_dest="${3:?missing worktree_dest}"
+    repo_dir="${4:?missing repo_dir}"
+
+    context_file="/tmp/task-context-${TASK_SLUG}.txt"
+    outcome_file="/tmp/task-outcome-${TASK_SLUG}.yaml"
+    TASK_TITLE=$(cat "$context_file" 2>/dev/null || echo "$TASK_SLUG")
+    rm -f "$outcome_file"
+
+    # ── Phase 6: Claude discussion ───────────────────────────────────────
+    log "Phase 6: Claude discussion (worktree: $worktree_dest)"
+    builtin cd "$worktree_dest"
+    mise trust --quiet 2>/dev/null || true
+    claude "Task: ${TASK_TITLE}
+
+---
+
+IMPORTANT RULES:
+1. This is a DISCUSSION ONLY. Do NOT implement anything. Do NOT create or modify any files in the project.
+2. Discuss the task with me: ask clarifying questions, suggest an approach, and refine the requirements.
+3. Keep everything HIGH LEVEL and CONCEPTUAL. No code, no file paths, no function names, no implementation details. Think product/design level, not engineering level.
+4. You SHOULD read and explore the codebase to understand what already exists. Do NOT ask the user about what exists — find out yourself. Use this understanding to inform the discussion, but keep your responses conceptual.
+5. When I say we are done discussing, write ONLY the YAML outcome file below and nothing else. The output must also be high level and conceptual — no code references.
+
+When discussion is complete, write a YAML file to ${outcome_file} with these fields:
+
+proceed: true
+refined_description: |
+  full updated task description
+acceptance_criteria: |
+  acceptance criteria
+implementation_notes: |
+  implementation notes
+
+Then tell me you are done and I should close this popup."
+    log "Claude discussion finished"
+
+    # ── Phase 7: Outcome check ───────────────────────────────────────────
+    log "Phase 7: Outcome check"
+    if [[ ! -f "$outcome_file" ]]; then
+        log "No outcome file found at $outcome_file"
+        echo "No outcome file found. Exiting."
+        sleep 2
+        exit 0
+    fi
+
+    log "Outcome file found: $(cat "$outcome_file")"
+    proceed=$(yq eval '.proceed' "$outcome_file")
+    log "Proceed: $proceed"
+    if [[ "$proceed" != "true" ]]; then
+        log "proceed=false, exiting"
+        echo "Outcome: proceed=false. Exiting."
+        sleep 2
+        exit 0
+    fi
+
+    refined_description=$(yq eval '.refined_description' "$outcome_file")
+    implementation_notes=$(yq eval '.implementation_notes' "$outcome_file")
+    acceptance_criteria=$(yq eval '.acceptance_criteria' "$outcome_file")
+
+    # ── Phase 8: Bootstrap + exec claude ─────────────────────────────────
+    log "Phase 8: Bootstrap + exec claude"
+
+    prompt="Task: ${TASK_TITLE}
+
+Description:
+${refined_description}
+
+Implementation notes:
+${implementation_notes}
+
+Acceptance criteria:
+${acceptance_criteria}
+
+Instructions:
+1. Review the codebase and the description above to understand the task
+2. Ask clarifying questions if anything is ambiguous
+3. Write tests first, then implement the change
+4. Run all checks (linting, formatting, type checking, and tests) and ensure they all pass
+5. Create a PR, push the code, and open the PR in the browser"
+
+    rm -f "$context_file" "$outcome_file"
+    log "Cleaned up temp files, exec-ing claude"
+    exec claude "$prompt"
+fi
+
+# ── Popup path: quick fzf selections ────────────────────────────────────────
+
+# ── Phase 1: Task title ──────────────────────────────────────────────────────
+
+log "Phase 1: Task title"
+task_title=$(</dev/null fzf \
+    --print-query \
+    --prompt="Task title: " \
+    --height=20% --reverse 2>/dev/null | head -1) || true
+
+if [[ -z "$task_title" ]]; then
+    log "No title entered, exiting"
+    exit 0
+fi
+
+task_slug=$(printf '%s' "$task_title" | tr '[:upper:]' '[:lower:]' | tr -cs 'a-z0-9' '-' | sed 's/^-//;s/-$//')
+log "Task title: $task_title slug: $task_slug"
+
+context_file="/tmp/task-context-${task_slug}.txt"
+printf '%s' "$task_title" > "$context_file"
+log "Context file written: $context_file"
+
+# ── Phase 2: Repo picker ─────────────────────────────────────────────────────
+
+log "Phase 2: Repo picker"
+repo_dir=$(find ~/projects -maxdepth 5 -name ".git" -type d \
+    -not -path "*/node_modules/*" \
+    -not -path "*/.worktrees/*" \
+    -not -path "*/vendor/*" \
+    2>/dev/null \
+    | sed 's|/\.git$||' \
+    | sort \
+    | fzf --prompt="Select project: " --height=40% --reverse) || true
+
+if [[ -z "$repo_dir" ]]; then
+    log "No repo selected, exiting"
+    exit 0
+fi
+log "Selected repo: $repo_dir"
+
+# ── Phase 3: Fetch + base branch selection ────────────────────────────────────
+
+log "Phase 3: Fetch + base branch"
+git -C "$repo_dir" fetch --quiet 2>/dev/null || true
+
+base_branch=$({
+    git -C "$repo_dir" branch --format='%(refname:short)' 2>/dev/null
+    git -C "$repo_dir" branch -r --format='%(refname:short)' 2>/dev/null \
+        | grep -v '^[^/]*/HEAD$' \
+        | grep -v '^[^/]*$' \
+        | sed 's|^[^/]*/||'
+} | sort -u | fzf --prompt="Select base branch: " --height=40% --reverse) || true
+
+if [[ -z "$base_branch" ]]; then
+    log "No base branch selected, exiting"
+    exit 0
+fi
+log "Base branch: $base_branch"
+
+# ── Phase 4: Branch name + worktree creation ─────────────────────────────────
+
+log "Phase 4: Branch + worktree"
+
+session_pattern="${task_slug//\//-}"
+matching_sessions=$(tmux list-sessions -F '#{session_name}' 2>/dev/null \
+    | grep -iF "$session_pattern" || true)
+log "Session pattern: $session_pattern matches: ${matching_sessions:-none}"
+
+fzf_output=$(echo "$matching_sessions" | grep -v '^$' | fzf \
+    --print-query \
+    --prompt="Branch name or session: " \
+    --query="${task_slug}-" \
+    --header="Select session or type new branch" \
+    --height=40% --reverse) || true
+
+query=$(echo "$fzf_output" | sed -n '1p')
+selection=$(echo "$fzf_output" | sed -n '2p')
+log "Parsed query='$query' selection='$selection'"
+
+if [[ -n "$selection" ]]; then
+    target_session="$selection"
+    branch="$query"
+    if [[ -z "$branch" ]]; then
+        branch="feat/${task_slug}-"
+    fi
+else
+    target_session=""
+    branch="$query"
+    if [[ -n "$branch" && "$branch" != */* ]]; then
+        branch="feat/$branch"
+    fi
+fi
+log "Branch: $branch target_session: ${target_session:-none}"
+
+if [[ -z "$branch" ]]; then
+    log "No branch name entered, exiting"
+    exit 0
+fi
+
+repo_name=$(basename "$repo_dir")
+
+worktree_path=$(git -C "$repo_dir" worktree list --porcelain \
+    | awk -v branch="refs/heads/$branch" '
+        /^worktree /{ wt = substr($0, 10) }
+        /^branch /{ if (substr($0, 8) == branch) print wt }
+    ')
+
+if [[ -n "$worktree_path" && -d "$worktree_path" ]]; then
+    worktree_dest="$worktree_path"
+    log "Existing worktree found: $worktree_dest"
+elif [[ -n "$worktree_path" && ! -d "$worktree_path" ]]; then
+    log "Stale worktree entry found, pruning: $worktree_path"
+    git -C "$repo_dir" worktree prune
+    parent_dir=$(dirname "$repo_dir")
+    branch_dir_name="${branch//\//-}"
+    worktree_dest="$parent_dir/.worktrees/$repo_name/$branch_dir_name"
+    log "Recreating worktree at: $worktree_dest"
+
+    if git -C "$repo_dir" show-ref --verify --quiet "refs/heads/$branch"; then
+        git -C "$repo_dir" worktree add "$worktree_dest" "$branch"
+    elif git -C "$repo_dir" show-ref --verify --quiet "refs/remotes/origin/$branch"; then
+        git -C "$repo_dir" worktree add --track -b "$branch" "$worktree_dest" "origin/$branch"
+    else
+        git -C "$repo_dir" worktree add -b "$branch" "$worktree_dest" "$base_branch"
+    fi
+else
+    parent_dir=$(dirname "$repo_dir")
+    branch_dir_name="${branch//\//-}"
+    worktree_dest="$parent_dir/.worktrees/$repo_name/$branch_dir_name"
+    log "Creating worktree at: $worktree_dest"
+
+    if git -C "$repo_dir" show-ref --verify --quiet "refs/heads/$branch"; then
+        git -C "$repo_dir" worktree add "$worktree_dest" "$branch"
+    elif git -C "$repo_dir" show-ref --verify --quiet "refs/remotes/origin/$branch"; then
+        git -C "$repo_dir" worktree add --track -b "$branch" "$worktree_dest" "origin/$branch"
+    else
+        git -C "$repo_dir" worktree add -b "$branch" "$worktree_dest" "$base_branch"
+    fi
+fi
+
+log "Worktree dest: $worktree_dest"
+zoxide add "$worktree_dest"
+
+# ── Phase 5: Launch tmux session with --continue ─────────────────────────────
+
+log "Phase 5: Launch tmux session"
+if [[ -n "${target_session:-}" ]]; then
+    existing_session="$target_session"
+else
+    existing_session=$(tmux list-sessions -F '#{session_name}' 2>/dev/null \
+        | grep -F "$task_slug" | head -1) || true
+fi
+log "Existing session search for '$task_slug': ${existing_session:-none}"
+
+if [[ -n "$existing_session" ]]; then
+    log "Adding window to existing session: $existing_session"
+    tmux new-window -t "$existing_session" -n "$repo_name" -c "$worktree_dest"
+    tmux split-window -t "$existing_session:$repo_name" -h -p 50 -c "$worktree_dest" \
+        "tmux-task-start --continue ${task_slug} ${worktree_dest} ${repo_dir}"
+    tmux select-pane -t "$existing_session:$repo_name.0"
+    tmux switch-client -t "$existing_session:$repo_name" 2>/dev/null || true
+else
+    log "Creating new session via tmux-sessionizer"
+    cat > "$worktree_dest/.tmux-sessionizer" <<HYDRATE
+tmux rename-window "${repo_name}"
+tmux split-window -h -p 50 "tmux-task-start --continue ${task_slug} ${worktree_dest} ${repo_dir}"
+HYDRATE
+    log "Hydrate hook written"
+    exec tmux-sessionizer "$worktree_dest"
+fi
