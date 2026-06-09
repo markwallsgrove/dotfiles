@@ -60,7 +60,7 @@ alias listLargeFiles="sudo du -h / 2>/dev/null | grep '[0-9\.]\+G'"
 alias ls="eza -alh --color=auto"
 alias fdf="fd --type f -H"
 alias fdd="fd --type d"
-alias cat="\$(which bat) -p --paging never"
+alias cat="\$(which batcat) -p --paging never"
 
 alias k='kubectl'
 alias kc='kubectx'

@@ -122,22 +122,22 @@ bindkey "^R" history-incremental-search-backward
 
 eval "$(zoxide init --cmd cd zsh)"
 
-if [ -x "$(command -v fnm)" ]; then
-    eval "$(fnm env --use-on-cd)"
-    fnm use --install-if-missing v21.7.1 1>/dev/null
+FNM_PATH="/home/smoky/.local/share/fnm"
+if [ -d "$FNM_PATH" ]; then
+  export PATH="$FNM_PATH:$PATH"
+  eval "$(fnm env --use-on-cd --shell zsh)"
+  fnm use --install-if-missing v21.7.1 1>/dev/null
 fi
 
 if [ -x "$(command -v fzf)" ]; then
     eval "$(fzf --zsh)"
 fi
-
-export NVM_DIR="$HOME/.nvm"
-[ -s "/opt/homebrew/opt/nvm/nvm.sh" ] && \. "/opt/homebrew/opt/nvm/nvm.sh"  # This loads nvm
-[ -s "/opt/homebrew/opt/nvm/etc/bash_completion.d/nvm" ] && \. "/opt/homebrew/opt/nvm/etc/bash_completion.d/nvm"  # This loads nvm bash_completion
-eval "$(/opt/homebrew/bin/mise activate zsh)"
+eval "$(mise activate zsh)"
 
 bindkey -s ^f "tmux-sessionizer\n"
 bindkey -s '\eh' "tmux-sessionizer -s 0\n"
 bindkey -s '\et' "tmux-sessionizer -s 1\n"
 bindkey -s '\en' "tmux-sessionizer -s 2\n"
 bindkey -s '\es' "tmux-sessionizer -s 3\n"
+
+
