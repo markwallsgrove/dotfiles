@@ -132,7 +132,6 @@ fi
 if [ -x "$(command -v fzf)" ]; then
     eval "$(fzf --zsh)"
 fi
-eval "$(mise activate zsh)"
 
 bindkey -s ^f "tmux-sessionizer\n"
 bindkey -s '\eh' "tmux-sessionizer -s 0\n"

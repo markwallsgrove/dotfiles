@@ -4,9 +4,6 @@ export EDITOR="$VISUAL"
 
 export GIT_WORKSPACE=~/projects
 
-# mise shims for non-interactive shells (Claude Code, scripts, etc.)
-export PATH="$HOME/.local/share/mise/shims:$PATH"
-
 export PATH="$PATH:/usr/local/go/bin"
 export PATH="$PATH:/Users/mark.w/go/bin"
 export PATH="$PATH:/home/linuxbrew/.linuxbrew/bin"

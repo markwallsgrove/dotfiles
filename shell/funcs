@@ -157,7 +157,6 @@ gwt() {
     echo "gwt: created worktree at $worktree_dest"
     builtin cd "$worktree_dest"
     zoxide add "$worktree_dest"
-    mise trust "$worktree_dest"
 }
 
 # Navigates to an automata-tech worktree via fzf; faster alternative to gwt when the worktree already exists.
