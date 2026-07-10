@@ -20,6 +20,10 @@ in
     ".gitconfig".source = ./git/gitconfig;
     ".vimrc".source = ./vim/vimrc;
     ".zshrc".source = ./shell/zshrc;
+    ".claude" = {
+      source = ./.claude;
+      recursive = true;
+    };
   };
   xdg.configFile = {
     "nvim" = {
