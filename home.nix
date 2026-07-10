@@ -66,6 +66,55 @@ in
     ];
     extraConfig = builtins.readFile ./tmux/tmux.conf;
   };
+  # --- herdr: terminal workspace manager, themed/keyed to match tmux -----
+  # Only tmux bindings with a real herdr equivalent are ported. Bindings
+  # that shell out to tmux-coupled scripts (tmux-sessionizer, gwts,
+  # tmux-claude-*, tmux-fzf-processes, tmux-task-*, tmux-snippets, the
+  # session-name branch paste) are NOT ported: those scripts call tmux
+  # directly (display-popup, send-keys, #{pane_current_path}) and won't
+  # work against herdr's socket API without a rewrite. herdr's own
+  # prefix+? help overlay replaces tmux-help natively.
+  programs.herdr = {
+    enable = true;
+    settings = {
+      theme.name = "catppuccin"; # matches tmux's catppuccin mocha flavor
+      keys = {
+        prefix = "ctrl+a"; # matches tmux's remapped C-a prefix
+        # splits: herdr names the action after the split *line's* orientation,
+        # tmux names it after the resulting pane *arrangement* — inverted.
+        # herdr's split_vertical (Direction::Horizontal, side-by-side result)
+        # is tmux's `\` (split-window -h); split_horizontal (Direction::Vertical,
+        # stacked result) already defaults to "-", matching tmux's `-` unchanged.
+        # Verified against herdr src/app/input/navigate.rs, not assumed.
+        split_vertical = [ "prefix+v" "prefix+backslash" ];
+        # pane focus: tmux's built-in prefix+arrow default (verified via
+        # `tmux list-keys -T prefix`), its -n M-arrow binding, and herdr's
+        # own vim-key defaults — all coexist
+        focus_pane_left = [ "prefix+h" "prefix+left" "alt+left" ];
+        focus_pane_down = [ "prefix+j" "prefix+down" "alt+down" ];
+        focus_pane_up = [ "prefix+k" "prefix+up" "alt+up" ];
+        focus_pane_right = [ "prefix+l" "prefix+right" "alt+right" ];
+        # git worktrees: native equivalent of tmux's C-g (gwts) / C-n (tmux-new-branch)
+        new_worktree = [ "prefix+shift+g" "ctrl+n" ];
+        open_worktree = [ "prefix+shift+o" "ctrl+g" ];
+        remove_worktree = "prefix+alt+d";
+        # jump to the agent pane needing attention: native equiv. of tmux-claude-next (C-e)
+        open_notification_target = "ctrl+e";
+        # jump to a specific agent pane: native equiv. of tmux-claude-finder (C-j), indexed only
+        focus_agent = "prefix+alt+1..9";
+        # quick jump: closest native equivalent of tmux-sessionizer (C-f); not project-scanning
+        goto = [ "prefix+g" "ctrl+f" ];
+        # kill session: native equiv. of tmux-session-kill (C-x)
+        close_workspace = [ "prefix+shift+d" "ctrl+x" ];
+        command = [{
+          key = "prefix+shift+r";
+          type = "shell";
+          command = "herdr server reload-config";
+          description = "reload config"; # matches tmux's prefix+r config reload
+        }];
+      };
+    };
+  };
   # bat's binary is just `bat` on Nix (already in home.packages below) —
   # `batcat` is a Debian/Ubuntu-only rename, so alias it for muscle memory.
   home.shellAliases = {
