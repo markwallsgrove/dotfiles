@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# Dry-builds the darwin system closure. No changes applied.
+set -euo pipefail
+cd "$(dirname "${BASH_SOURCE[0]}")" || exit
+
+nix build ".#darwinConfigurations.Marks-MacBook-Pro.system" --dry-run "$@"

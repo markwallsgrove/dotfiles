@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+# Applies the config to this machine: installs packages, links dotfiles,
+# runs activation (including the op-inject secrets template).
+set -euo pipefail
+cd "$(dirname "${BASH_SOURCE[0]}")" || exit
+
+exec darwin-rebuild switch --flake ".#Marks-MacBook-Pro" "$@"
