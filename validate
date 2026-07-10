@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+# Pre-commit-style gate: lint shell scripts, then validate + dry-build the flake.
+set -euo pipefail
+cd "$(dirname "${BASH_SOURCE[0]}")" || exit
+
+echo "==> shellcheck"
+shellcheck scripts/* build check switch validate
+
+echo "==> shfmt"
+shfmt -d scripts/* build check switch validate
+
+echo "==> nix flake check"
+./check
+
+echo "==> nix build (dry-run)"
+./build

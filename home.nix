@@ -76,13 +76,16 @@ in
     bash fzf zoxide eza bat fd ripgrep entr tree
     # Git
     git git-absorb git-fixup git-lfs git-workspace
-    # Languages / toolchains (replaces mise + nvm + pyenv — versions pinned
-    # by nixpkgs revision instead of a version manager)
+    # Languages / toolchains (replaces nvm + pyenv — versions pinned by
+    # nixpkgs revision instead of a version manager)
     go
     rustc cargo
     nodejs_22
     python314 # was python@3.14; mise's 3.12 pin dropped, standardizing on 3.14
     dotnet-sdk_8
+    # mise itself: not used for this machine's own toolchains (pinned above),
+    # but other checked-out repos still ship .mise.toml/.tool-versions
+    mise
     # Kubernetes
     kubectl # was kubernetes-cli
     kubernetes-helm # was helm
@@ -120,5 +123,16 @@ in
   home.activation.globalToolInstalls = config.lib.dag.entryAfter [ "writeBoundary" ] ''
     run mkdir -p "$HOME/.npm-global"
     run ${pkgs.bash}/bin/bash -c ${pkgs.lib.escapeShellArg ''PATH="${pkgs.nodejs_22}/bin:$PATH" ${pkgs.nodejs_22}/bin/npm install -g --prefix "$HOME/.npm-global" @fission-ai/openspec''}
+  '';
+  # --- ~/.secrets: templated from shell/secrets.tpl via `op inject` ----
+  # secrets.tpl holds `{{ op://vault/item/field }}` refs, no secret material —
+  # safe to commit. `op` comes from the 1password-cli brew cask (not nixpkgs),
+  # so it's not on the Nix-built PATH; requires an unlocked op session at
+  # switch time (Touch ID prompt via the 1Password app integration).
+  home.activation.secretsTemplate = config.lib.dag.entryAfter [ "writeBoundary" ] ''
+    run ${pkgs.bash}/bin/bash -c ${pkgs.lib.escapeShellArg ''
+      PATH="/opt/homebrew/bin:$PATH" op inject -i ${./shell/secrets.tpl} -o "$HOME/.secrets"
+      chmod 600 "$HOME/.secrets"
+    ''}
   '';
 }
