@@ -128,6 +128,17 @@ in
     run mkdir -p "$HOME/.npm-global"
     run ${pkgs.bash}/bin/bash -c ${pkgs.lib.escapeShellArg ''PATH="${pkgs.nodejs_22}/bin:$PATH" ${pkgs.nodejs_22}/bin/npm install -g --prefix "$HOME/.npm-global" @fission-ai/openspec''}
   '';
+  # --- MeetingBar: declarative prefs (cask installed in darwin-configuration.nix) --
+  # Only portable settings go here — selectedCalendarIDs are EventKit UUIDs
+  # generated per-machine (invalid on a fresh install) and `browsers` just
+  # mirrors what MeetingBar auto-detects, so both are left for the app to
+  # regenerate rather than hardcoded.
+  home.activation.meetingBarDefaults = config.lib.dag.entryAfter [ "writeBoundary" ] ''
+    run /usr/bin/defaults write leits.MeetingBar eventStoreProvider -string "MacOS Calendar App"
+    run /usr/bin/defaults write leits.MeetingBar joinEventNotificationTime -int 60
+    run /usr/bin/defaults write leits.MeetingBar fullscreenNotification -bool true
+    run /usr/bin/defaults write leits.MeetingBar fullscreenNotificationTime -int 5
+  '';
   # --- ~/.secrets: templated from shell/secrets.tpl via `op inject` ----
   # secrets.tpl holds `{{ op://vault/item/field }}` refs, no secret material —
   # safe to commit. `op` comes from the 1password-cli brew cask (not nixpkgs),
