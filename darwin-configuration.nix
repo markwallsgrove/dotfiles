@@ -38,6 +38,7 @@
       "meetingbar"
       "orbstack" # Docker/Linux VM runtime: GUI app, replaces Docker Desktop/colima
       "tomatobar"
+      "twingate" # Zero trust network access: GUI app, not a CLI nixpkgs pkg
     ];
   };
 
