@@ -40,3 +40,7 @@ setopt HIST_REDUCE_BLANKS        # Remove superfluous blanks before recording en
 setopt HIST_VERIFY               # Don't execute immediately upon history expansion.
 
 export DOTNET_ROOT="/opt/homebrew/opt/dotnet/libexec"
+
+# docker CLI (nix-installed) -> OrbStack's daemon socket. Set unconditionally:
+# docker just fails to connect until OrbStack is running, then works in-session.
+export DOCKER_HOST="unix://$HOME/.orbstack/run/docker.sock"

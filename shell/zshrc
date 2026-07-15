@@ -122,6 +122,11 @@ bindkey "^R" history-incremental-search-backward
 
 eval "$(zoxide init --cmd cd zsh)"
 
+# mise: activate per-directory toolchains for repos shipping .mise.toml/.tool-versions
+if [ -x "$(command -v mise)" ]; then
+    eval "$(mise activate zsh)"
+fi
+
 FNM_PATH="/home/smoky/.local/share/fnm"
 if [ -d "$FNM_PATH" ]; then
   export PATH="$FNM_PATH:$PATH"
