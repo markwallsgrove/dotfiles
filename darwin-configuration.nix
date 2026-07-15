@@ -28,6 +28,9 @@
     taps = [
       "nikitabobko/tap" # required for the aerospace cask below
     ];
+    brews = [
+      "openspec" # Spec-driven development CLI for AI coding assistants
+    ];
     casks = [
       "1password-cli"
       "nikitabobko/tap/aerospace"
