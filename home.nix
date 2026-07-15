@@ -148,6 +148,8 @@ in
     # AWS
     aws-sso-util
     amazon-ecr-credential-helper # was docker-credential-helper-ecr
+    # Databases
+    postgresql_16 # psql + pg_dump/restore client (no server daemon needed here)
     # Buf / Protobuf
     buf protobuf
     # CI
