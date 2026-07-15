@@ -160,7 +160,7 @@ in
     yq-go # was yq
     jq shellcheck shfmt neovim btop htop
     stu exercism
-    docker # CLI only — Docker Desktop/colima still needed for the daemon
+    docker # CLI only — OrbStack (brew cask) provides the daemon
     # was mise-managed
     awscli2 checkmake gitleaks poetry pre-commit prek
     # npm-global replacements

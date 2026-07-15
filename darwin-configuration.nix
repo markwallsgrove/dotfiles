@@ -36,6 +36,7 @@
       "ghostty"
       "headlamp" # Kubernetes UI: Electron GUI, not a CLI nixpkgs pkg
       "meetingbar"
+      "orbstack" # Docker/Linux VM runtime: GUI app, replaces Docker Desktop/colima
       "tomatobar"
     ];
   };
