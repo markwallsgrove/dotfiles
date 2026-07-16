@@ -176,3 +176,28 @@ wcd() {
     builtin cd "$base/$selection"
     zoxide add "$base/$selection"
 }
+
+# Switches the active AWS profile by picking one from ~/.aws/config via fzf and exporting AWS_PROFILE. Pass a query to prefilter fzf.
+awsp() {
+    local config="${AWS_CONFIG_FILE:-$HOME/.aws/config}"
+    if [[ ! -f "$config" ]]; then
+        echo "awsp: no AWS config at $config" >&2
+        return 1
+    fi
+
+    local profile
+    profile=$(
+        grep -oE '^\[(profile [^]]+|default)\]' "$config" \
+            | sed -E 's/^\[(profile )?//; s/\]$//' \
+            | sort -u \
+            | fzf --prompt="Select AWS profile: " --height=40% --reverse --query="$*"
+    )
+
+    if [[ -z "$profile" ]]; then
+        echo "awsp: no profile selected" >&2
+        return 1
+    fi
+
+    export AWS_PROFILE="$profile"
+    echo "awsp: AWS_PROFILE=$profile"
+}
