@@ -12,6 +12,7 @@
 - use shellcheck and shfmt on shell scripts to lint/format them
 
 # Github
+- never add Claude markers (e.g. "🤖 Generated with Claude Code", "Co-Authored-By: Claude") anywhere - not in commits, PRs, code, or comments
 - main is the root branch (not master)
 - always create a branch for any change as all changes need to be required
 - always use fixups for changes to commits
