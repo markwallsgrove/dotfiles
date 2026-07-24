@@ -1,0 +1,22 @@
+[
+  {"query": "could you act like a coordinator? I've got a set of tasks in linear I want completing — spin up five claude instances in herdr, each on its own git worktree, and if there are dependencies branch one off another", "should_trigger": true},
+  {"query": "start work on ACC-31 in /Users/mark/projects/github/biblio-tech/atlas", "should_trigger": true},
+  {"query": "can you get agents going on ACC-19, ACC-20 and ACC-21 and drive each one to a draft PR?", "should_trigger": true},
+  {"query": "monitor the claude sessions I've got running and unblock them when they get stuck — I don't want to talk to the agents directly, you do that for me", "should_trigger": true},
+  {"query": "ACC-24 is currently blocked. why haven't you unblocked it?", "should_trigger": true},
+  {"query": "spin up a herdr worktree for INS-1976 off origin/main and brief a claude to implement it, then keep an eye on it via events", "should_trigger": true},
+  {"query": "i want to parallelise these five linear tickets across separate worktrees with an agent on each, and have you clear their permission prompts and escalate anything risky to me", "should_trigger": true},
+  {"query": "please also pick up ACC-15 — get an instance seeded and watch it", "should_trigger": true},
+  {"query": "orchestrate the billing-screen tickets (ACC-1 through ACC-5), base them off feat/migrate-billing-portal and shepherd them to PRs", "should_trigger": true},
+  {"query": "make the checking event-based so you resolve the agents' blocks quickly instead of polling them every few minutes", "should_trigger": true},
+  {"query": "implement ACC-31 yourself — add the CSV export button to the report view and open a PR", "should_trigger": false},
+  {"query": "set up a herdr session for me so I can pair with a single claude on this refactor", "should_trigger": false},
+  {"query": "break this adoption-export feature down into Linear issues under a new project and set the initiative", "should_trigger": false},
+  {"query": "review PR #12 on account-charges and leave inline comments on anything sketchy", "should_trigger": false},
+  {"query": "my playwright e2e tests collide on ports when run in parallel — fix the hardcoded 54329 and re-enable fullyParallel", "should_trigger": false},
+  {"query": "create a git worktree for this branch so I can test it without stashing my current changes", "should_trigger": false},
+  {"query": "what's the current status of ACC-24 in linear and who's it assigned to?", "should_trigger": false},
+  {"query": "write the github actions workflow to build the docker image and deploy account-charges to ECS", "should_trigger": false},
+  {"query": "the terraform plan for the account-charges staging stack fails on a missing variable — help me track down which one", "should_trigger": false},
+  {"query": "give me a one-paragraph summary of what shipped from the ACC team this week", "should_trigger": false}
+]
