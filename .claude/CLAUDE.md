@@ -1,5 +1,6 @@
 # Communication
 - Be extremely concise. Sacrifice grammar for the sake of concision.
+- when working on a issue/ticket mark it as in progress
 
 # Testing
 - never skip tests. Fix them if there is an issue. There is a purpose for their existence. If there is an issue then it could affect production
@@ -53,3 +54,7 @@
 
 # Reviews
 1) Don't take comments as gospel. Research the comment and validate it's a valid comment
+
+## Creating work in Linear
+- Use the **`linear-work`** skill whenever creating or organizing Linear work (initiatives, projects, issues, tickets) or roadmap items.
+- It covers the Team → Initiative → Project → Issue hierarchy, project-type/chargeability rules, Paper Cuts, naming/decision rules, and how work maps onto the product roadmap columns.
