@@ -4,6 +4,15 @@ let
   # (v1/server/compile_handler_test.go references an undefined `fixture`,
   # unrelated to our config) — skip checkPhase, keep everything else as-is.
   opa = pkgs.open-policy-agent.overrideAttrs (_: { doCheck = false; });
+  # Claude Code writes settings.json itself (e.g. plugin enable/disable via
+  # `claude plugin install`). A normal recursive link makes it a read-only
+  # /nix/store symlink, so those writes fail with EACCES. Link everything in
+  # .claude read-only EXCEPT settings.json, which gets a writable out-of-store
+  # symlink to the live repo file below — CLI writes then surface as repo diffs.
+  claudeStatic = lib.cleanSourceWith {
+    src = ./.claude;
+    filter = path: _type: baseNameOf path != "settings.json";
+  };
 in
 {
   home.stateVersion = "24.11";
@@ -21,9 +30,14 @@ in
     ".vimrc".source = ./vim/vimrc;
     ".zshrc".source = ./shell/zshrc;
     ".claude" = {
-      source = ./.claude;
+      source = claudeStatic;
       recursive = true;
     };
+    # writable: symlinks to the live checkout, not the read-only store copy.
+    # Path is the fixed main-checkout location (not a worktree).
+    ".claude/settings.json".source =
+      config.lib.file.mkOutOfStoreSymlink
+        "${config.home.homeDirectory}/projects/github/markwallsgrove/dotfiles/.claude/settings.json";
   };
   xdg.configFile = {
     "nvim" = {
