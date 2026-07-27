@@ -161,6 +161,29 @@ pulled away from, still resurfaces. When you add/remove agents, stop the
 Monitor and relaunch with the new pane set. When every agent has delivered its
 PR, **stop the Monitor** — otherwise it nudges idle, finished agents forever.
 
+Once agents have PRs open, arm a **second** persistent Monitor on the bundled
+`scripts/pr-watch.sh` to learn when a PR **merges** so you can reclaim that
+agent (see step 8). It's a separate watcher because it's a different signal on a
+much slower cadence — GitHub PR state every 5 minutes, not agent status every
+second — so don't fold it into `fleet-watch.sh`.
+
+```
+Monitor(
+  command: "env bash <skill>/scripts/pr-watch.sh ACC-15=mark/acc-15 ACC-19=mark/acc-19 ACC-24=mark/acc-24",
+  description: "PR merged (teardown): ACC-15, ACC-19, ACC-24",
+  persistent: true,
+)
+```
+
+Pass `<label>=<branch>` per agent (the branch is the ticket's `gitBranchName`,
+the same one you made the worktree on). It polls `gh` every 300s (`INTERVAL=`),
+edge-triggers a line the instant a branch's PR goes to `merged`, and re-nudges
+every 900s (`STALE=`) so a merge you didn't act on resurfaces. It is **merged-
+only**: a closed-without-merge PR is left alone (it may reopen). A `gh`/network
+error is treated as *unknown* — it never emits and never advances state, so a
+transient failure can't cause a false teardown and a real merge still triggers
+on the next good poll. The script only **emits**; it never destroys anything.
+
 ### 5. Resolve gates
 
 On each event, `agent read` the pane, understand the pending command, then:
@@ -230,6 +253,34 @@ verified in-environment (e.g. `tf:plan`/apply needing live cloud creds), and
 remind the user these are drafts to review — you approved shell commands by
 reading them and can misjudge.
 
+### 8. Reclaim merged agents (PR-teardown)
+
+When the PR-teardown watcher (step 4) emits `... ACC-19 <branch> PR #NN ->
+merged`, the work has landed and that agent's resources can be reclaimed — but
+**you** tear down, never the watcher, and only after confirming nothing would be
+lost:
+
+1. **Confirm the branch is clean.** In the agent's worktree, check for
+   uncommitted changes (`git -C <worktree> status --porcelain`) and unpushed
+   commits (`git -C <worktree> cherry -v` / `git -C <worktree> log
+   @{upstream}..`). If either is non-empty, **do not tear down** — hold and
+   escalate to the user (a merged PR plus local un-landed work is a real fork).
+2. **Tear down in order**, once clean:
+   - `herdr workspace close <workspace_id>` — stop the agent + close the
+     workspace first so nothing holds the worktree open.
+   - `git worktree remove <worktree_path>` — remove the worktree dir.
+   - `git branch -d <branch>` — delete the now-merged local branch. Use `-d`
+     (safe), not `-D`; if git refuses because it can't see the branch as merged
+     locally, **investigate** rather than force — the merge may not be on the
+     base you have.
+3. **Update the watchers.** Drop the reclaimed agent from both Monitors and
+   relaunch with the reduced set. When the last agent is torn down, **stop the
+   PR-teardown Monitor** too.
+
+A merged-PR teardown removes work outside a single worktree, so treat it like
+any outward action: confirm first, do it on the user's behalf, and report what
+you closed/removed/deleted.
+
 ## herdr input mechanics (where it goes wrong)
 
 These are hard-won; ignore them and briefs silently fail to land.
@@ -264,6 +315,13 @@ These are hard-won; ignore them and briefs silently fail to land.
 - A background script that auto-approves prompts by pattern-matching — that
   bypasses the very safety gate you're meant to be. Keep a human-equivalent
   (you) reading each prompt.
+- A watcher that tears down workspaces on its own. `pr-watch.sh` only emits;
+  destruction (workspace/worktree/branch) is yours to confirm and run, same as
+  approving any other outward action.
+- Tearing down on a **closed-unmerged** PR, or on a single failed `gh` poll — a
+  merge is the only teardown trigger, and one `unknown` poll means nothing.
+- Tearing down while the branch has unpushed commits or uncommitted changes —
+  confirm clean first, else escalate.
 - Committing follow-up work onto an already-merged branch — cut a fresh branch
   off the integration base.
 - Letting two coordinators run at once.
