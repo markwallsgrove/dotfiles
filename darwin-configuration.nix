@@ -36,6 +36,7 @@
       "nikitabobko/tap/aerospace"
       "claude-code"
       "dbeaver-community"
+      "dockspace" # Dock widgets: GUI app, not a CLI nixpkgs pkg
       "ghostty"
       "headlamp" # Kubernetes UI: Electron GUI, not a CLI nixpkgs pkg
       "meetingbar"
@@ -44,6 +45,7 @@
       "spotify" # Music streaming: GUI app, not a CLI nixpkgs pkg
       "tomatobar"
       "twingate" # Zero trust network access: GUI app, not a CLI nixpkgs pkg
+      "wallspace" # Live wallpaper: GUI app, not a CLI nixpkgs pkg
     ];
   };
 
