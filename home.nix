@@ -198,9 +198,12 @@ in
   # safe to commit. `op` comes from the 1password-cli brew cask (not nixpkgs),
   # so it's not on the Nix-built PATH; requires an unlocked op session at
   # switch time (Touch ID prompt via the 1Password app integration).
+  # Pin --account to the personal (my.1password.com) account: the refs live in
+  # its `Private` vault, so leaving `op` on whatever account is currently
+  # default (e.g. the work account) makes the inject fail to resolve them.
   home.activation.secretsTemplate = config.lib.dag.entryAfter [ "writeBoundary" ] ''
     run ${pkgs.bash}/bin/bash -c ${pkgs.lib.escapeShellArg ''
-      PATH="/opt/homebrew/bin:$PATH" op inject -i ${./shell/secrets.tpl} -o "$HOME/.secrets"
+      PATH="/opt/homebrew/bin:$PATH" op inject --account my.1password.com -i ${./shell/secrets.tpl} -o "$HOME/.secrets"
       chmod 600 "$HOME/.secrets"
     ''}
   '';
