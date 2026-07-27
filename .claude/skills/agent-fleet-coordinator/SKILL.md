@@ -20,7 +20,9 @@ description: >-
 You are a **coordinator** sitting between the user and a fleet of autonomous
 Claude coding agents. Each agent runs in its own **herdr** terminal workspace,
 in its own **git worktree** on its own branch, working a single **Linear**
-ticket. Your job: get each agent started with a good brief, watch them via
+ticket — and that workspace nests as a **sub-space under the Captain**, the
+repo's main-checkout workspace you drive the fleet from. Your job: get each
+agent started with a good brief, watch them via
 events, clear the permission gates they hit, escalate the decisions you
 genuinely can't make, and drive each one to a **draft PR** — all without the
 user having to talk to the agents directly.
@@ -52,7 +54,8 @@ instantly and carry the real decisions to the user.
 ## herdr command cheat-sheet
 
 ```
-herdr worktree create --cwd <repo> --branch <name> --base <ref> --path <dir> --label <x> --no-focus --json
+herdr workspace create --cwd <repo> --label <name> --no-focus              # open a repo's MAIN checkout as a Captain (parent space)
+herdr worktree create --workspace <captain_id> --branch <name> --base <ref> --path <dir> --label <x> --no-focus --json  # nests as a sub-space of the Captain
 herdr pane run <pane_id> "<command>"          # launch a program in a pane (types cmd + Enter)
 herdr agent send <pane_id> "<text>"           # type literal text into the agent's input (NO Enter)
 herdr pane send-keys <pane_id> Enter          # press a key (Enter, Escape, Down, i, ...)
@@ -85,15 +88,40 @@ herdr workspace list | close <id>
 
 ### 2. Stand up each agent
 
-Create a worktree (this also creates a herdr workspace + a shell pane):
+Each agent's workspace must nest as a **sub-space under the Captain** — the
+parent workspace holding that repo's **main checkout** — not spawn as a detached
+top-level space. herdr fixes the parent **at creation time** from the
+`--workspace <captain_id>` flag; there is no `--parent` flag and no way to
+re-parent afterwards. `--cwd <repo>` creates a **standalone top-level**
+workspace, so **never use `--cwd` here** — always pass `--workspace`.
+
+First find the Captain for the ticket's repo: the workspace whose worktree is
+the repo's main checkout (`is_linked_worktree: false` and `repo_root` == the
+target repo).
 
 ```
-herdr worktree create --cwd <repo> --branch <user>/<ticket> --base origin/<base> \
+herdr workspace list --json    # pick the workspace where worktree.repo_root == <repo> and is_linked_worktree is false
+```
+
+`--workspace` **infers the repo from the Captain**, so you need **one Captain
+per repo** — you can't nest a ticket from repo B under a Captain that has repo A
+open. If the ticket's repo has no main-checkout workspace open yet, open one to
+be its Captain first:
+
+```
+herdr workspace create --cwd <repo> --label <repo-name> --no-focus
+```
+
+Then create the ticket's worktree as a sub-space of that Captain (this also
+gives it a shell pane):
+
+```
+herdr worktree create --workspace <captain_id> --branch <user>/<ticket> --base origin/<base> \
   --path <repo>/.claude/worktrees/<ticket>-<slug> --label <ticket> --no-focus --json
 ```
 
-The JSON result gives you the `workspace_id` and root `pane_id`. Launch Claude
-in that pane:
+The JSON result gives you the new sub-space's `workspace_id` and root `pane_id`.
+Launch Claude in that pane:
 
 ```
 herdr pane run <pane_id> "claude --permission-mode acceptEdits"
@@ -267,7 +295,9 @@ lost:
    escalate to the user (a merged PR plus local un-landed work is a real fork).
 2. **Tear down in order**, once clean:
    - `herdr workspace close <workspace_id>` — stop the agent + close the
-     workspace first so nothing holds the worktree open.
+     workspace first so nothing holds the worktree open. Close the **agent's own
+     sub-space**, never the Captain: closing a parent workspace also closes
+     every sub-space nested under it, wiping the whole fleet's views at once.
    - `git worktree remove <worktree_path>` — remove the worktree dir.
    - `git branch -d <branch>` — delete the now-merged local branch. Use `-d`
      (safe), not `-D`; if git refuses because it can't see the branch as merged
