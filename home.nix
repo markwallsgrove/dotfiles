@@ -38,6 +38,15 @@ in
     ".claude/settings.json".source =
       config.lib.file.mkOutOfStoreSymlink
         "${config.home.homeDirectory}/projects/github/markwallsgrove/dotfiles/.claude/settings.json";
+    # docker writes config.json itself (context switches, `docker login`,
+    # plugin hooks) — a read-only /nix/store symlink would make those writes
+    # fail with EACCES. Use the same writable out-of-store symlink as claude's
+    # settings.json above so docker's own writes surface as repo diffs. The
+    # committed file adds credHelpers.ghcr.io = "gh" (docker-credential-gh,
+    # installed via ./scripts) on top of the live credsStore/context/plugins.
+    ".docker/config.json".source =
+      config.lib.file.mkOutOfStoreSymlink
+        "${config.home.homeDirectory}/projects/github/markwallsgrove/dotfiles/config/docker/config.json";
   };
   xdg.configFile = {
     "nvim" = {
