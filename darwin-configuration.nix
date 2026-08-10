@@ -26,6 +26,7 @@
       cleanup = "none";
     };
     taps = [
+      "b451c/quickmd" # required for the quickmd cask below
       "nikitabobko/tap" # required for the aerospace cask below
     ];
     brews = [
@@ -33,6 +34,7 @@
     ];
     casks = [
       "1password-cli"
+      "b451c/quickmd/quickmd" # Markdown previewer: GUI app, not a CLI nixpkgs pkg
       "nikitabobko/tap/aerospace"
       "claude-code"
       "dbeaver-community"
