@@ -27,6 +27,16 @@ in
     ".exports".source = ./shell/exports;
     ".funcs".source = ./shell/funcs;
     ".gitconfig".source = ./git/gitconfig;
+    # Docker CLI credential wiring: credsStore routes every registry through
+    # amazon-ecr-credential-helper (installed below), which mints ECR tokens
+    # from the active AWS session and returns nothing for non-ECR hosts (they
+    # fall back to anonymous). credHelpers only match exact hostnames — no
+    # wildcards — so credsStore is used to cover all ECR accounts/regions.
+    # No static creds, so it's safe to commit and kept read-only: a
+    # `docker login` write would EACCES, intentionally stopping auth tokens
+    # leaking into this public repo (and login to non-ECR registries is
+    # unsupported under this store).
+    ".docker/config.json".source = ./docker/config.json;
     ".vimrc".source = ./vim/vimrc;
     ".zshrc".source = ./shell/zshrc;
     ".claude" = {
