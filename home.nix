@@ -175,6 +175,7 @@ in
     jira-cli-go # was jira-cli
     yq-go # was yq
     jq shellcheck shfmt neovim btop htop
+    glow # terminal markdown renderer
     stu exercism
     docker # CLI only — OrbStack (brew cask) provides the daemon
     # was mise-managed
