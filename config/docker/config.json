@@ -1,6 +1,6 @@
 {
   "auths": {},
-  "credsStore": "osxkeychain",
+  "credsStore": "ecr-login",
   "currentContext": "orbstack",
   "plugins": {
     "-x-cli-hints": {

@@ -3,6 +3,7 @@ require('lualine').setup {
     icons_enabled = true,
     component_separators = '|',
     section_separators = '',
+    globalstatus = true,
   },
   sections = {
     lualine_x = {

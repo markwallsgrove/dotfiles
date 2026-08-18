@@ -27,16 +27,6 @@ in
     ".exports".source = ./shell/exports;
     ".funcs".source = ./shell/funcs;
     ".gitconfig".source = ./git/gitconfig;
-    # Docker CLI credential wiring: credsStore routes every registry through
-    # amazon-ecr-credential-helper (installed below), which mints ECR tokens
-    # from the active AWS session and returns nothing for non-ECR hosts (they
-    # fall back to anonymous). credHelpers only match exact hostnames — no
-    # wildcards — so credsStore is used to cover all ECR accounts/regions.
-    # No static creds, so it's safe to commit and kept read-only: a
-    # `docker login` write would EACCES, intentionally stopping auth tokens
-    # leaking into this public repo (and login to non-ECR registries is
-    # unsupported under this store).
-    ".docker/config.json".source = ./docker/config.json;
     ".vimrc".source = ./vim/vimrc;
     ".zshrc".source = ./shell/zshrc;
     ".claude" = {
@@ -52,8 +42,9 @@ in
     # plugin hooks) — a read-only /nix/store symlink would make those writes
     # fail with EACCES. Use the same writable out-of-store symlink as claude's
     # settings.json above so docker's own writes surface as repo diffs. The
-    # committed file adds credHelpers.ghcr.io = "gh" (docker-credential-gh,
-    # installed via ./scripts) on top of the live credsStore/context/plugins.
+    # committed file routes ECR via credsStore = "ecr-login" and adds
+    # credHelpers.ghcr.io = "gh" (docker-credential-gh, installed via
+    # ./scripts), which takes precedence over credsStore for that host.
     ".docker/config.json".source =
       config.lib.file.mkOutOfStoreSymlink
         "${config.home.homeDirectory}/projects/github/markwallsgrove/dotfiles/config/docker/config.json";

@@ -4,4 +4,15 @@
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")" || exit
 
-exec darwin-rebuild switch --flake ".#Marks-MacBook-Pro" "$@"
+darwin-rebuild switch --flake ".#Marks-MacBook-Pro" "$@"
+
+# Nix pins every store file's mtime to 1, so Neovim's Lua module loader
+# (keyed on path + mtime) never invalidates its bytecode cache across
+# generations and keeps serving stale modules. Clear it after the relink so
+# nvim recompiles from the freshly linked config. Resolve the invoking user's
+# home since this is typically run under sudo.
+user_home="$HOME"
+if [ -n "${SUDO_USER:-}" ]; then
+	user_home="$(dscl . -read "/Users/${SUDO_USER}" NFSHomeDirectory 2>/dev/null | awk '{print $NF}')"
+fi
+rm -rf "${user_home:-$HOME}/.cache/nvim/luac"
