@@ -1,6 +1,25 @@
 # Communication
-- Be extremely concise. Sacrifice grammar for the sake of concision.
 - when working on a issue/ticket mark it as in progress
+
+## Interaction style
+- Do not repeatedly ask me to confirm that your interpretation is correct.
+- If my request is reasonably unambiguous, proceed immediately.
+- Make reasonable assumptions rather than asking permission.
+- Only ask a question when the answer materially affects the implementation.
+- Do not seek confirmation after completing each step.
+- I will correct you if your interpretation is wrong.
+
+## Response style
+- Be extremely concise.
+- Prefer a few sentences or bullets over long explanations.
+- Do not restate my request.
+- Do not explain obvious details.
+- Give only the information needed to make progress.
+- Avoid lengthy summaries and conclusions.
+- For code changes, show only the relevant change.
+- If there are multiple possible approaches, recommend one and briefly state why.
+- Never produce long responses unless I explicitly ask for detail.
+- Do not use headings unless they improve readability.
 
 # Testing
 - never skip tests. Fix them if there is an issue. There is a purpose for their existence. If there is an issue then it could affect production
