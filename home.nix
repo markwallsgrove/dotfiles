@@ -203,6 +203,21 @@ in
   home.activation.globalToolInstalls = config.lib.dag.entryAfter [ "writeBoundary" ] ''
     run mkdir -p "$HOME/.npm-global"
     run ${pkgs.bash}/bin/bash -c ${pkgs.lib.escapeShellArg ''PATH="${pkgs.nodejs_22}/bin:$PATH" ${pkgs.nodejs_22}/bin/npm install -g --prefix "$HOME/.npm-global" @fission-ai/openspec''}
+    # termflix: not in nixpkgs; fetch the latest prebuilt release binary
+    # directly (piping the upstream install.sh through bash swallowed errors).
+    run mkdir -p "$HOME/.local/bin"
+    run ${pkgs.bash}/bin/bash -c ${pkgs.lib.escapeShellArg ''
+      set -euo pipefail
+      case "$(uname -m)" in
+        arm64|aarch64) arch=aarch64 ;;
+        x86_64) arch=x86_64 ;;
+        *) echo "termflix: unsupported arch $(uname -m)" >&2; exit 1 ;;
+      esac
+      tag="$(${pkgs.curl}/bin/curl -fsSL https://api.github.com/repos/paulrobello/termflix/releases/latest | ${pkgs.jq}/bin/jq -r .tag_name)"
+      ${pkgs.curl}/bin/curl -fsSL -o "$HOME/.local/bin/termflix" \
+        "https://github.com/paulrobello/termflix/releases/download/$tag/termflix-macos-$arch"
+      chmod +x "$HOME/.local/bin/termflix"
+    ''}
   '';
   # --- ~/.secrets: templated from shell/secrets.tpl via `op inject` ----
   # secrets.tpl holds `{{ op://vault/item/field }}` refs, no secret material —
