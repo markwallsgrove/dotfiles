@@ -1,5 +1,6 @@
 # Communication
 - when working on a issue/ticket mark it as in progress
+- use simplified technical english when replying
 
 ## Interaction style
 - Do not repeatedly ask me to confirm that your interpretation is correct.
