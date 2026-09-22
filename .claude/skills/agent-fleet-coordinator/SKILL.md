@@ -191,7 +191,7 @@ PR, **stop the Monitor** — otherwise it nudges idle, finished agents forever.
 
 Once agents have PRs open, arm a **second** persistent Monitor on the bundled
 `scripts/pr-watch.sh` to learn when a PR **merges** so you can reclaim that
-agent (see step 8). It's a separate watcher because it's a different signal on a
+agent (see step 9). It's a separate watcher because it's a different signal on a
 much slower cadence — GitHub PR state every 5 minutes, not agent status every
 second — so don't fold it into `fleet-watch.sh`.
 
@@ -211,6 +211,33 @@ only**: a closed-without-merge PR is left alone (it may reopen). A `gh`/network
 error is treated as *unknown* — it never emits and never advances state, so a
 transient failure can't cause a false teardown and a real merge still triggers
 on the next good poll. The script only **emits**; it never destroys anything.
+
+Also once PRs are open, arm a **third** persistent Monitor on the bundled
+`scripts/ci-watch.sh` to learn when a PR's CI/CD **fails or passes** — this is
+the feedback loop that lets you relay a broken build back to the agent that
+caused it (see step 8). Keep it a separate watcher for the same reason as
+pr-watch: it's a distinct signal on its own cadence (check-run rollup, ~60s).
+
+```
+Monitor(
+  command: "env bash <skill>/scripts/ci-watch.sh ACC-15=mark/acc-15 ACC-19=mark/acc-19 ACC-24=mark/acc-24",
+  description: "CI failed/passed: ACC-15, ACC-19, ACC-24",
+  persistent: true,
+)
+```
+
+Same `<label>=<branch>` args as pr-watch. Every 20s (`INTERVAL=`) it makes a
+**single GraphQL call** for the whole fleet — a repo-scoped `search` OR-ing every
+watched `head:<branch>`, pulling each PR's server-computed check-run rollup — so
+one poll covers all agents, not one REST call per branch. The repo is resolved
+from the cwd (override with `REPO=owner/name`). It edge-triggers a line the
+instant CI transitions **into** `failure` (actionable — read the log and relay
+it to the agent; re-nudged every 600s `STALE=` while it stays red) or **into**
+`success` (informational one-shot; not re-nudged). `pending` and `none` (no
+PR/checks yet) never emit. If the one call fails, **every** branch is treated as
+*unknown* that poll — none emits or advances state — so a transient failure
+can't fabricate a red/green event and a real transition still triggers on the
+next good poll. It only **emits**; relaying to the agent is yours.
 
 ### 5. Resolve gates
 
@@ -281,7 +308,40 @@ verified in-environment (e.g. `tf:plan`/apply needing live cloud creds), and
 remind the user these are drafts to review — you approved shell commands by
 reading them and can misjudge.
 
-### 8. Reclaim merged agents (PR-teardown)
+### 8. React to CI/CD results (the feedback loop)
+
+When the CI watcher (step 4) emits `... ACC-19 <branch> CI #NN -> failure`, the
+agent's last push broke the build and that agent needs to hear about it — but
+**you** read the failure first, then relay; never bounce a bare "CI failed" at
+the agent.
+
+1. **Read the failure.** `gh pr checks <branch>` shows which check went red;
+   `gh run view <run-id> --log-failed` gives the failing step's output. Work out
+   *what* failed and *whether it's the agent's change* or a flake/infra issue.
+2. **Relay the concrete error to the agent** via `herdr agent send` (single
+   line, Enter as a separate step — see "herdr input mechanics"). Give it the
+   failing check name and the actual error, not just "it's red": e.g. "CI failed
+   on <branch>: the `lint` job reports <error> at <file>:<line> — fix and push."
+   Relaying a build failure is routine coordinator work, same class as relaying
+   an escalation answer. The agent fixes, pushes, and the next good poll
+   re-emits the branch's new state — so a red→green fix surfaces on its own.
+3. **Flakes/infra aren't the agent's problem.** If the red isn't the agent's
+   code (transient runner failure, unrelated broken main), say so — re-run it
+   (`gh run rerun <run-id> --failed`, routine) or note it and move on. Don't send
+   the agent chasing a failure it didn't cause.
+4. **Genuine forks still escalate.** If the fix is a real decision (dependency
+   bump, config change with blast radius beyond the worktree), that's step 6 —
+   take it to the user, don't have the agent guess.
+
+On `-> success` the watcher is just telling you the branch's last push is green
+— informational. Note it; it's a candidate to mark PR-ready, but green alone
+doesn't flip a draft (step 7 keeps PRs draft until the user says so).
+
+The loop is: push → CI runs → watcher emits → you read & relay → agent fixes →
+push → … until green. It edge-triggers each transition, so you never hand-poll
+CI. When an agent is torn down (step 9), drop it from this watcher too.
+
+### 9. Reclaim merged agents (PR-teardown)
 
 When the PR-teardown watcher (step 4) emits `... ACC-19 <branch> PR #NN ->
 merged`, the work has landed and that agent's resources can be reclaimed — but
@@ -303,9 +363,10 @@ lost:
      (safe), not `-D`; if git refuses because it can't see the branch as merged
      locally, **investigate** rather than force — the merge may not be on the
      base you have.
-3. **Update the watchers.** Drop the reclaimed agent from both Monitors and
-   relaunch with the reduced set. When the last agent is torn down, **stop the
-   PR-teardown Monitor** too.
+3. **Update the watchers.** Drop the reclaimed agent from all three Monitors
+   (fleet-watch, pr-watch, ci-watch) and relaunch each with the reduced set.
+   When the last agent is torn down, **stop the PR-teardown and CI Monitors**
+   too.
 
 A merged-PR teardown removes work outside a single worktree, so treat it like
 any outward action: confirm first, do it on the user's behalf, and report what
@@ -348,6 +409,14 @@ These are hard-won; ignore them and briefs silently fail to land.
 - A watcher that tears down workspaces on its own. `pr-watch.sh` only emits;
   destruction (workspace/worktree/branch) is yours to confirm and run, same as
   approving any other outward action.
+- Relaying a bare "CI failed" to the agent without reading the log first — you
+  don't know if it's the agent's bug or a flake, and the agent can't fix what it
+  can't see. Read `--log-failed`, relay the concrete error.
+- A background script that auto-fixes/auto-pushes on a red CI event —
+  `ci-watch.sh` only emits; reading the failure and steering the agent is yours,
+  same as clearing any other gate.
+- Flipping a draft PR to ready just because `ci-watch.sh` went green — green is
+  informational; readiness is the user's call (step 7).
 - Tearing down on a **closed-unmerged** PR, or on a single failed `gh` poll — a
   merge is the only teardown trigger, and one `unknown` poll means nothing.
 - Tearing down while the branch has unpushed commits or uncommitted changes —
