@@ -28,6 +28,10 @@
 - prefer to not use mocks where possible. If mocks must be used then ensure the mocks are validated through the linter and/or type checker
 - review the sonar report for test coverage
 
+# Code Style
+- comments should only explain what exists, not the history of what once existed
+- keep comments concise and to the point
+
 # CLI
 - use `builtin` for commands such as cd, ls, find, etc. Do not use it for python, make (commands which are not related to the terminal implementation).
 - use shellcheck and shfmt on shell scripts to lint/format them
