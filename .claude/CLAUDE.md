@@ -80,6 +80,7 @@
 - All checked out code is under /Users/mark/projects
 - personal: /Users/mark/projects/github/markwallsgrove
 - work: /Users/mark/projects/github/biblio-tech
+- wayfinder: /Users/mark/projects/github/biblio-tech/alx.ts (everyone refers to alx.ts as wayfinder)
 
 # Reviews
 1) Don't take comments as gospel. Research the comment and validate it's a valid comment
