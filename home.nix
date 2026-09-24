@@ -62,6 +62,7 @@ in
       source = ./config/ghostty;
       recursive = true;
     };
+    "worktrunk/config.toml".source = ./config/worktrunk/config.toml;
   };
   home.file.".local/bin" = {
     source = ./scripts;

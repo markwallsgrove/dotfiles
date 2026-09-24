@@ -1,0 +1,5 @@
+# Worktrunk user configuration.
+#
+# Worktrees live one directory above the repo, grouped by repo name:
+#   ../.worktrees/<repo>/<worktree>
+worktree-path = "{{ repo_path }}/../.worktrees/{{ repo }}/{{ branch | sanitize }}"
