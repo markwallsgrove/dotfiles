@@ -5,8 +5,8 @@ attention_dir="/tmp/claude-attention"
 state_file="/tmp/claude-broadcast-deselected"
 
 # Gather all claude panes
-panes=$(tmux list-panes -a -F '#{pane_id}|#{session_name}|#{window_name}|#{pane_current_command}' \
-    | grep '|claude-chill$') || true
+panes=$(tmux list-panes -a -F '#{pane_id}|#{session_name}|#{window_name}|#{pane_current_command}' |
+    grep '|claude-chill$') || true
 
 if [[ -z "$panes" ]]; then
     echo "No Claude instances found."
@@ -19,7 +19,7 @@ declare -A deselected_map
 if [[ -f "$state_file" ]]; then
     while IFS= read -r ident; do
         [[ -n "$ident" ]] && deselected_map["$ident"]=1
-    done < "$state_file"
+    done <"$state_file"
 fi
 
 now=$(date +%s)
@@ -29,12 +29,12 @@ while IFS='|' read -r pane_id session window _cmd; do
     attention_file="${attention_dir}/${pane_id}"
     if [[ -f "$attention_file" ]]; then
         ts=$(cat "$attention_file")
-        age=$(( (now - ts) / 60 ))
+        age=$(((now - ts) / 60))
         entries+=("! ${session} > ${window}|${pane_id}|(${age}m ago)")
     else
         entries+=("  ${session} > ${window}|${pane_id}|")
     fi
-done <<< "$panes"
+done <<<"$panes"
 
 # Sort: attention (!) first
 sorted=$(printf '%s\n' "${entries[@]}" | sort -r)
@@ -43,8 +43,6 @@ sorted=$(printf '%s\n' "${entries[@]}" | sort -r)
 fzf_input=""
 line_num=0
 deselect_positions=()
-# Maps line_num -> stable identifier for saving state later
-declare -A line_idents
 # All identifiers in display order
 all_idents=()
 
@@ -53,7 +51,6 @@ while IFS='|' read -r label target age; do
     # Extract stable identifier (strip leading ! or spaces from label)
     ident=$(printf '%s' "$label" | sed 's/^[! ]*//')
     all_idents+=("$ident")
-    line_idents[$line_num]="$ident"
 
     if [[ -n "${deselected_map[$ident]:-}" ]]; then
         deselect_positions+=("$line_num")
@@ -65,7 +62,7 @@ while IFS='|' read -r label target age; do
     else
         fzf_input+="${label}"$'\t'"${target}"$'\n'
     fi
-done <<< "$sorted"
+done <<<"$sorted"
 
 # Build fzf bind: select all, then deselect remembered items
 bind_actions="select-all"
@@ -74,8 +71,8 @@ for pos in "${deselect_positions[@]}"; do
 done
 
 # Step 1: Multi-select Claude instances
-selected=$(printf '%s' "$fzf_input" \
-    | fzf --multi \
+selected=$(printf '%s' "$fzf_input" |
+    fzf --multi \
         --with-nth=1 --delimiter=$'\t' \
         --prompt="Select Claude instances> " \
         --header="TAB = toggle | ENTER = confirm selection" \
@@ -95,13 +92,13 @@ while IFS= read -r line; do
     label=$(printf '%s' "$line" | awk -F$'\t' '{print $1}')
     ident=$(printf '%s' "$label" | sed 's/^[! ]*//' | sed 's/  *(.*//')
     selected_idents["$ident"]=1
-done <<< "$selected"
+done <<<"$selected"
 
 # Save deselected state for next run
-> "$state_file"
+: >"$state_file"
 for ident in "${all_idents[@]}"; do
     if [[ -z "${selected_idents[$ident]:-}" ]]; then
-        printf '%s\n' "$ident" >> "$state_file"
+        printf '%s\n' "$ident" >>"$state_file"
     fi
 done
 

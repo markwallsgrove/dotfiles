@@ -9,7 +9,7 @@ fi
 
 # Function to display help
 show_help() {
-    cat << EOF
+    cat <<EOF
 Usage: $0 [OPTIONS] <project> <job_id>
 Download all artifacts from a CircleCI job.
 Arguments:
@@ -37,30 +37,30 @@ JOB_ID=""
 # Parse command line arguments
 while [[ $# -gt 0 ]]; do
     case $1 in
-        -v|--verbose)
-            VERBOSE=true
-            shift
-            ;;
-        -p|--parallel)
-            PARALLEL_MAX="$2"
-            shift 2
-            ;;
-        -h|--help)
+    -v | --verbose)
+        VERBOSE=true
+        shift
+        ;;
+    -p | --parallel)
+        PARALLEL_MAX="$2"
+        shift 2
+        ;;
+    -h | --help)
+        show_help
+        exit 0
+        ;;
+    *)
+        if [[ -z "$PROJECT" ]]; then
+            PROJECT="$1"
+        elif [[ -z "$JOB_ID" ]]; then
+            JOB_ID="$1"
+        else
+            echo "Error: Too many arguments" >&2
             show_help
-            exit 0
-            ;;
-        *)
-            if [[ -z "$PROJECT" ]]; then
-                PROJECT="$1"
-            elif [[ -z "$JOB_ID" ]]; then
-                JOB_ID="$1"
-            else
-                echo "Error: Too many arguments" >&2
-                show_help
-                exit 1
-            fi
-            shift
-            ;;
+            exit 1
+        fi
+        shift
+        ;;
     esac
 done
 
@@ -93,7 +93,7 @@ if [[ $curl_exit -ne 0 ]]; then
     exit 1
 fi
 
-if ! echo "$artifacts" | jq -e 'type == "array"' > /dev/null 2>&1; then
+if ! echo "$artifacts" | jq -e 'type == "array"' >/dev/null 2>&1; then
     echo "Error: API returned unexpected response from $api_url:" >&2
     echo "$artifacts" >&2
     exit 1

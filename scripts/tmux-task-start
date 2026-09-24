@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
-exec 2> /tmp/tmux-task-start.log
+exec 2>/tmp/tmux-task-start.log
 trap 'echo "" > /dev/tty; echo "ERROR: Command failed (exit $?). See /tmp/tmux-task-start.log" > /dev/tty; read -n1 < /dev/tty' ERR
 
 log() { echo "[$(date '+%H:%M:%S')] $*" >&2; }
@@ -15,10 +15,10 @@ repo_dir=$(find ~/projects -maxdepth 5 -name ".git" -type d \
     -not -path "*/node_modules/*" \
     -not -path "*/.worktrees/*" \
     -not -path "*/vendor/*" \
-    2>/dev/null \
-    | sed 's|/\.git$||' \
-    | sort \
-    | fzf --prompt="Select project: " --height=40% --reverse) || true
+    2>/dev/null |
+    sed 's|/\.git$||' |
+    sort |
+    fzf --prompt="Select project: " --height=40% --reverse) || true
 
 if [[ -z "$repo_dir" ]]; then
     log "No repo selected, exiting"
@@ -33,10 +33,10 @@ git -C "$repo_dir" fetch --quiet 2>/dev/null || true
 
 base_branch=$({
     git -C "$repo_dir" branch --format='%(refname:short)' 2>/dev/null
-    git -C "$repo_dir" branch -r --format='%(refname:short)' 2>/dev/null \
-        | grep -v '^[^/]*/HEAD$' \
-        | grep -v '^[^/]*$' \
-        | sed 's|^[^/]*/||'
+    git -C "$repo_dir" branch -r --format='%(refname:short)' 2>/dev/null |
+        grep -v '^[^/]*/HEAD$' |
+        grep -v '^[^/]*$' |
+        sed 's|^[^/]*/||'
 } | sort -u | fzf --prompt="Select base branch: " --height=40% --reverse) || true
 
 if [[ -z "$base_branch" ]]; then
@@ -105,8 +105,8 @@ log "Phase 5: Branch + worktree"
 repo_name=$(basename "$repo_dir")
 
 session_pattern="${task_slug//\//-}"
-matching_sessions=$(tmux list-sessions -F '#{session_name}' 2>/dev/null \
-    | grep -iF "$session_pattern" || true)
+matching_sessions=$(tmux list-sessions -F '#{session_name}' 2>/dev/null |
+    grep -iF "$session_pattern" || true)
 log "Session pattern: $session_pattern matches: ${matching_sessions:-none}"
 
 fzf_output=$(echo "$matching_sessions" | grep -v '^$' | fzf \
@@ -140,8 +140,8 @@ if [[ -z "$branch" ]]; then
     exit 0
 fi
 
-worktree_path=$(git -C "$repo_dir" worktree list --porcelain \
-    | awk -v branch="refs/heads/$branch" '
+worktree_path=$(git -C "$repo_dir" worktree list --porcelain |
+    awk -v branch="refs/heads/$branch" '
         /^worktree /{ wt = substr($0, 10) }
         /^branch /{ if (substr($0, 8) == branch) print wt }
     ')
@@ -189,13 +189,13 @@ log "Phase 6: Launch tmux session"
 if [[ -n "${target_session:-}" ]]; then
     existing_session="$target_session"
 else
-    existing_session=$(tmux list-sessions -F '#{session_name}' 2>/dev/null \
-        | grep -F "$task_slug" | head -1) || true
+    existing_session=$(tmux list-sessions -F '#{session_name}' 2>/dev/null |
+        grep -F "$task_slug" | head -1) || true
 fi
 log "Existing session search for '$task_slug': ${existing_session:-none}"
 
 prompt_file="/tmp/task-prompt-${task_slug}.txt"
-cat > "$prompt_file" <<PROMPT
+cat >"$prompt_file" <<PROMPT
 Task: ${task_title}
 
 Description:
@@ -227,7 +227,7 @@ else
     # shellcheck disable=SC2016
     printf 'tmux rename-window "%s"\nclaude "$(cat %s)"\nrm -f %s\n' \
         "$repo_name" "$prompt_file" "$prompt_file" \
-        > "$worktree_dest/.tmux-sessionizer"
+        >"$worktree_dest/.tmux-sessionizer"
     log "Hydrate hook written"
     exec tmux-sessionizer "$worktree_dest"
 fi
