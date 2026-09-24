@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+# Upgrades every machine-level package source: bumps Nix flake inputs, gates
+# them through validate, applies the new closure, then upgrades Homebrew.
+# mise toolchains are per-repo (not machine-level here) so run `mise upgrade`
+# inside each repo that ships a .mise.toml/.tool-versions.
+set -euo pipefail
+cd "$(dirname "${BASH_SOURCE[0]}")" || exit
+
+# Run as the normal user. Only ./switch (darwin-rebuild) needs root and is
+# escalated below; Homebrew refuses to run as root, so the whole script must
+# not be invoked with sudo.
+if [[ $EUID -eq 0 ]]; then
+    echo "error: run ./upgrade as your normal user, not with sudo." >&2
+    echo "It escalates only the switch step; Homebrew must not run as root." >&2
+    exit 1
+fi
+
+echo "==> nix flake update"
+nix flake update
+
+echo "==> validate (lint + flake check + dry-build)"
+./validate
+
+echo "==> switch (apply new closure; sudo)"
+sudo ./switch "$@"
+
+if command -v brew >/dev/null 2>&1; then
+    echo "==> brew update && brew upgrade"
+    brew update
+    brew upgrade
+else
+    echo "==> brew not found, skipping" >&2
+fi
+
+echo "==> upgrade complete"

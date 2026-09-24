@@ -4,10 +4,10 @@ set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")" || exit
 
 echo "==> shellcheck"
-shellcheck scripts/* build check switch validate
+shellcheck scripts/* build check switch upgrade validate
 
 echo "==> shfmt"
-shfmt -d scripts/* build check switch validate
+shfmt -d scripts/* build check switch upgrade validate
 
 echo "==> nix flake check"
 ./check

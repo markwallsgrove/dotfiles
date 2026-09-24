@@ -24,6 +24,8 @@ switch time).
 - `./check` — pre-commit-style gate: shellcheck/shfmt + `./validate` + `./build`.
 - `./switch` — apply the config: installs packages, links dotfiles, runs
   activation (including the `op inject` secrets template).
+- `./upgrade` — bump Nix flake inputs, `./validate`, `./switch`, then
+  `brew upgrade`. mise toolchains are per-repo — run `mise upgrade` in each.
 
 ## Secrets
 

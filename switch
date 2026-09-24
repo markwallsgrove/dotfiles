@@ -13,6 +13,6 @@ darwin-rebuild switch --flake ".#Marks-MacBook-Pro" "$@"
 # home since this is typically run under sudo.
 user_home="$HOME"
 if [ -n "${SUDO_USER:-}" ]; then
-	user_home="$(dscl . -read "/Users/${SUDO_USER}" NFSHomeDirectory 2>/dev/null | awk '{print $NF}')"
+    user_home="$(dscl . -read "/Users/${SUDO_USER}" NFSHomeDirectory 2>/dev/null | awk '{print $NF}')"
 fi
 rm -rf "${user_home:-$HOME}/.cache/nvim/luac"

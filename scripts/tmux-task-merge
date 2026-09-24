@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
-exec 2> /tmp/tmux-task-merge.log
+exec 2>/tmp/tmux-task-merge.log
 trap 'echo "" > /dev/tty; echo "ERROR: Command failed (exit $?). See /tmp/tmux-task-merge.log" > /dev/tty; read -n1 < /dev/tty' ERR
 
 log() { echo "[$(date '+%H:%M:%S')] $*" >&2; }
@@ -14,7 +14,8 @@ selected=$(
     tmux list-sessions -F '#{session_name}' |
         grep -v "^${current_session}$" |
         fzf --prompt="Select session to merge & close: " \
-            --height=80% --reverse) || true
+            --height=80% --reverse
+) || true
 
 if [[ -z "$selected" ]]; then
     log "No session selected, exiting"
@@ -33,8 +34,8 @@ log "Worktree path: $worktree_path"
 branch=$(git -C "$worktree_path" rev-parse --abbrev-ref HEAD)
 log "Branch: $branch"
 
-repo_root=$(git -C "$worktree_path" worktree list --porcelain \
-    | awk '/^worktree /{ print substr($0, 10); exit }')
+repo_root=$(git -C "$worktree_path" worktree list --porcelain |
+    awk '/^worktree /{ print substr($0, 10); exit }')
 log "Repo root: $repo_root"
 
 # ── Phase 3: Check PR and CI status ─────────────────────────────────────────
@@ -43,14 +44,14 @@ log "Phase 3: Check PR"
 pr_json=$(gh pr view "$branch" --repo "$(git -C "$worktree_path" remote get-url origin)" --json number,title,url,statusCheckRollup,state 2>/dev/null || true)
 
 if [[ -z "$pr_json" ]]; then
-    echo "No PR found for branch '$branch'. Exiting." > /dev/tty
+    echo "No PR found for branch '$branch'. Exiting." >/dev/tty
     sleep 2
     exit 0
 fi
 
 pr_state=$(echo "$pr_json" | jq -r '.state')
 if [[ "$pr_state" == "MERGED" ]]; then
-    echo "PR is already merged." > /dev/tty
+    echo "PR is already merged." >/dev/tty
     sleep 2
     exit 0
 fi
@@ -68,10 +69,10 @@ check_summary=$(echo "$pr_json" | jq -r '
 
 if [[ "$check_summary" -gt 0 ]]; then
     checks_failing=true
-    echo "CI checks are failing or pending for PR #$pr_number" > /dev/tty
-    echo "" > /dev/tty
-    gh pr checks "$pr_number" --repo "$(git -C "$worktree_path" remote get-url origin)" > /dev/tty 2>/dev/null || true
-    echo "" > /dev/tty
+    echo "CI checks are failing or pending for PR #$pr_number" >/dev/tty
+    echo "" >/dev/tty
+    gh pr checks "$pr_number" --repo "$(git -C "$worktree_path" remote get-url origin)" >/dev/tty 2>/dev/null || true
+    echo "" >/dev/tty
 
     override=$(echo -e "no\nyes" | fzf --prompt="Override and merge anyway? " --height=10% --reverse) || true
     if [[ "$override" != "yes" ]]; then
@@ -106,7 +107,7 @@ if [[ "$checks_failing" == "true" ]]; then
     merge_args+=(--admin)
 fi
 
-echo "Merging PR #$pr_number..." > /dev/tty
+echo "Merging PR #$pr_number..." >/dev/tty
 gh "${merge_args[@]}"
 log "PR merged"
 
@@ -123,6 +124,6 @@ git -C "$repo_root" branch -D "$branch" 2>/dev/null || true
 log "Killing session: $session_name"
 tmux kill-session -t "$session_name" 2>/dev/null || true
 
-echo "Done! PR #$pr_number merged, worktree removed, session closed." > /dev/tty
+echo "Done! PR #$pr_number merged, worktree removed, session closed." >/dev/tty
 log "Complete"
 sleep 2

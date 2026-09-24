@@ -6,10 +6,10 @@ repo_dir=$(find ~/projects -maxdepth 5 -name ".git" -type d \
     -not -path "*/node_modules/*" \
     -not -path "*/.worktrees/*" \
     -not -path "*/vendor/*" \
-    2>/dev/null \
-    | sed 's|/\.git$||' \
-    | sort \
-    | fzf --prompt="Select repository: " --height=40% --reverse) || true
+    2>/dev/null |
+    sed 's|/\.git$||' |
+    sort |
+    fzf --prompt="Select repository: " --height=40% --reverse) || true
 
 if [[ -z "$repo_dir" ]]; then
     exit 0
@@ -21,10 +21,10 @@ git -C "$repo_dir" fetch --quiet 2>/dev/null || true
 # Select or create branch
 fzf_output=$({
     git -C "$repo_dir" branch --format='%(refname:short)' 2>/dev/null
-    git -C "$repo_dir" branch -r --format='%(refname:short)' 2>/dev/null \
-        | grep -v '^[^/]*/HEAD$' \
-        | grep -v '^[^/]*$' \
-        | sed 's|^[^/]*/||'
+    git -C "$repo_dir" branch -r --format='%(refname:short)' 2>/dev/null |
+        grep -v '^[^/]*/HEAD$' |
+        grep -v '^[^/]*$' |
+        sed 's|^[^/]*/||'
 } | sort -u | fzf --print-query --prompt="Select/create branch: " --height=40% --reverse 2>&1) || true
 
 query=$(echo "$fzf_output" | sed -n '1p')
@@ -37,8 +37,8 @@ if [[ -z "$branch" ]]; then
 fi
 
 # Resolve existing worktree for this branch
-worktree_path=$(git -C "$repo_dir" worktree list --porcelain \
-    | awk -v branch="refs/heads/$branch" '
+worktree_path=$(git -C "$repo_dir" worktree list --porcelain |
+    awk -v branch="refs/heads/$branch" '
         /^worktree /{ wt = substr($0, 10) }
         /^branch /{ if (substr($0, 8) == branch) print wt }
     ')

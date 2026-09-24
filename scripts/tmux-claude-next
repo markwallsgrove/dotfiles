@@ -4,8 +4,8 @@ set -euo pipefail
 attention_dir="/tmp/claude-attention"
 
 # Gather all claude panes
-panes=$(tmux list-panes -a -F '#{pane_id}|#{session_name}|#{window_name}|#{pane_current_command}' \
-    | grep '|claude$') || true
+panes=$(tmux list-panes -a -F '#{pane_id}|#{session_name}|#{window_name}|#{pane_current_command}' |
+    grep '|claude$') || true
 
 # Prune stale attention files
 if [[ -d "$attention_dir" ]]; then
@@ -26,12 +26,12 @@ oldest_ts=""
 while IFS='|' read -r pane_id _session _window _cmd; do
     attention_file="${attention_dir}/${pane_id}"
     [[ -f "$attention_file" ]] || continue
-    ts=$(< "$attention_file")
-    if [[ -z "$oldest_ts" ]] || (( ts < oldest_ts )); then
+    ts=$(<"$attention_file")
+    if [[ -z "$oldest_ts" ]] || ((ts < oldest_ts)); then
         oldest_ts="$ts"
         oldest_pane="$pane_id"
     fi
-done <<< "$panes"
+done <<<"$panes"
 
 [[ -z "$oldest_pane" ]] && exit 0
 

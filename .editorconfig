@@ -1,0 +1,7 @@
+root = true
+
+# Shell scripts are extensionless; match them by path so shfmt (which reads
+# .editorconfig when no -i flag is passed) formats with 4-space indentation.
+[{scripts/*,build,check,switch,upgrade,validate}]
+indent_style = space
+indent_size = 4
