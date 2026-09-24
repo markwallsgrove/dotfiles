@@ -30,6 +30,7 @@
     ];
     brews = [
       "openspec" # Spec-driven development CLI for AI coding assistants
+      "mise" # per-directory toolchains; tracks upstream faster than nixpkgs
     ];
     casks = [
       "1password-cli"

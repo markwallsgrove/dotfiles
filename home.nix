@@ -160,9 +160,8 @@ in
     nodejs_22
     python314 # was python@3.14; mise's 3.12 pin dropped, standardizing on 3.14
     dotnet-sdk_8
-    # mise itself: not used for this machine's own toolchains (pinned above),
-    # but other checked-out repos still ship .mise.toml/.tool-versions
-    mise
+    # mise: managed via Homebrew (darwin-configuration.nix) so it tracks
+    # upstream releases; nixpkgs lags and shipped a version with a blocking bug.
     # Kubernetes
     kubectl # was kubernetes-cli
     kubernetes-helm # was helm
