@@ -192,6 +192,7 @@ in
     awscli2 checkmake gitleaks poetry pre-commit prek
     # npm-global replacements
     pnpm # corepack ships with nodejs_22, no separate package needed
+    typescript typescript-language-server # nvim TS LSP; avoids read-only npm -g
     # pip-global replacements
     pyright ruff nodeenv
     claude-code
