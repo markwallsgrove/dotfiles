@@ -40,6 +40,7 @@
       "dockspace" # Dock widgets: GUI app, not a CLI nixpkgs pkg
       "ghostty"
       "headlamp" # Kubernetes UI: Electron GUI, not a CLI nixpkgs pkg
+      "mdhero" # Markdown viewer/editor: GUI app, not a CLI nixpkgs pkg
       "meetingbar"
       "obsidian" # Markdown knowledge base: GUI app, not a CLI nixpkgs pkg
       "orbstack" # Docker/Linux VM runtime: GUI app, replaces Docker Desktop/colima

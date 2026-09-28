@@ -98,6 +98,8 @@ alias screenshot-area="grim -g \"\$(slurp)\" - | swappy -f -"
 
 alias viewS3=stu
 
+alias openPdf="open -a MDHero"
+
 # alias claude="claude-chill /opt/homebrew/bin/claude"
 
 alias recreateAuthentikNamespace="kubectl delete namespace authentik --wait=true && kubectl create namespace authentik"
