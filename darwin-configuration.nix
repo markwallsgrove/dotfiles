@@ -36,6 +36,7 @@
       "1password-cli"
       "nikitabobko/tap/aerospace"
       "claude-code"
+      "codex" # OpenAI coding agent CLI: cask ships bin/codex, tracks upstream faster than nixpkgs
       "dbeaver-community"
       "dockspace" # Dock widgets: GUI app, not a CLI nixpkgs pkg
       "ghostty"
