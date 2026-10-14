@@ -42,9 +42,12 @@ in
     # plugin hooks) — a read-only /nix/store symlink would make those writes
     # fail with EACCES. Use the same writable out-of-store symlink as claude's
     # settings.json above so docker's own writes surface as repo diffs. The
-    # committed file routes ECR via credsStore = "ecr-login" and adds
-    # credHelpers.ghcr.io = "gh" (docker-credential-gh, installed via
-    # ./scripts), which takes precedence over credsStore for that host.
+    # committed file stores `docker login` creds in the macOS keychain
+    # (credsStore = "osxkeychain"). credHelpers override it per host: known
+    # ECR registries use "ecr-login" (tokens fetched from AWS, no
+    # `docker login`; the helper cannot store creds, so `docker login` to
+    # those hosts fails) and ghcr.io uses "gh" (docker-credential-gh,
+    # installed via ./scripts).
     ".docker/config.json".source =
       config.lib.file.mkOutOfStoreSymlink
         "${config.home.homeDirectory}/projects/github/markwallsgrove/dotfiles/config/docker/config.json";

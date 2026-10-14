@@ -2,8 +2,12 @@
 	"auths": {
 		"ghcr.io": {}
 	},
-	"credsStore": "ecr-login",
+	"credsStore": "osxkeychain",
 	"credHelpers": {
+		"109579967776.dkr.ecr.eu-west-1.amazonaws.com": "ecr-login",
+		"155080367246.dkr.ecr.eu-west-1.amazonaws.com": "ecr-login",
+		"155080367246.dkr.ecr.us-east-2.amazonaws.com": "ecr-login",
+		"605134438489.dkr.ecr.eu-west-1.amazonaws.com": "ecr-login",
 		"ghcr.io": "gh"
 	},
 	"currentContext": "orbstack",
