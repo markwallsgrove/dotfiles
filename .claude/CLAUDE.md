@@ -88,3 +88,11 @@
 ## Creating work in Linear
 - Use the **`linear-work`** skill whenever creating or organizing Linear work (initiatives, projects, issues, tickets) or roadmap items.
 - It covers the Team → Initiative → Project → Issue hierarchy, project-type/chargeability rules, Paper Cuts, naming/decision rules, and how work maps onto the product roadmap columns.
+
+## Agent skills: biblio-tech/institutions
+
+Applies only when working in `biblio-tech/institutions` (the main checkout or any worktree under `.worktrees/institutions/`).
+
+- **Issue tracker**: Linear, Wayfinder team (key `W`), one project per feature. See `/Users/mark/projects/github/biblio-tech/.agent-local/institutions/issue-tracker.md`.
+- **Triage labels**: the five defaults, in the Wayfinder team's "Triage" label group. See `/Users/mark/projects/github/biblio-tech/.agent-local/institutions/triage-labels.md`.
+- **Domain docs**: single glossary, the root `GLOSSARY.md` and `docs/ADRs/` of the current worktree. See `/Users/mark/projects/github/biblio-tech/.agent-local/institutions/domain.md`.
