@@ -1,6 +1,24 @@
 {
   "showMessageTimestamps": true,
   "timeFormat": "%Y-%m-%d %H:%M:%S",
+  "showTurnDuration": true,
+  "attribution": {
+    "commit": "",
+    "pr": ""
+  },
+  "spellcheck": {
+    "enabled": true,
+    "checker": "hunspell",
+    "language": "en_GB"
+  },
+  "footerLinksRegexes": [
+    {
+      "type": "regex",
+      "pattern": "\\b(?<id>(?:ACC|AUT|CON|DATA|E|INS|MAT|PDEV|PLA|PMO|PRO|STATE|STU|SUP|TAN|UK|W)-\\d+)\\b",
+      "url": "https://linear.app/bibliu/issue/{id}",
+      "label": "{id}"
+    }
+  ],
   "permissions": {
     "allow": [
       "Read",

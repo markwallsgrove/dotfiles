@@ -155,6 +155,8 @@ in
   home.packages = with pkgs; [
     # Shell / CLI
     bash fzf zoxide eza bat fd ripgrep entr tree
+    # Claude Code prompt spellcheck (spellcheck.language = en_GB)
+    (hunspell.withDicts (d: [ d.en_GB-ise ]))
     # Git
     git git-absorb git-fixup git-lfs git-workspace
     # Languages / toolchains (replaces nvm + pyenv — versions pinned by
