@@ -1,4 +1,6 @@
 {
+  "showMessageTimestamps": true,
+  "timeFormat": "%Y-%m-%d %H:%M:%S",
   "permissions": {
     "allow": [
       "Read",
