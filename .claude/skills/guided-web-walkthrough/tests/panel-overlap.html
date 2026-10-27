@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>guide-panel overlap test</title>
+<style>
+  body { margin: 0; font: 16px system-ui, sans-serif; }
+  .spacer { height: 6000px; }
+  #target { margin-left: 55%; width: 40%; height: 60px; background: #ddd; }
+  iframe { width: 1040px; height: 697px; border: 1px solid #999; display: block; }
+</style>
+</head>
+<body>
+<pre id="result">pending</pre>
+<script>
+// The panel must never cover a highlighted element. Needs a real browser (smooth
+// scrolling), served over http from the skill folder:
+//   python3 -m http.server -d ~/.claude/skills/guided-web-walkthrough 8000
+//   open http://127.0.0.1:8000/tests/panel-overlap.html
+// With no ?case= the page runs every case in an iframe and writes "RESULT: PASS" or
+// "RESULT: FAIL" plus one line per case to #result.
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const overlaps = (a, b) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+const box = (r) => `${Math.round(r.left)},${Math.round(r.top)} ${Math.round(r.width)}x${Math.round(r.height)}`;
+const long = `<p>${"Some explanation text. ".repeat(30)}</p>`;
+
+const cases = {
+  // The target starts off screen, so the panel must move once the smooth scroll ends.
+  async scroll() {
+    __guide.show({ step: 1, total: 2, title: "Scroll", html: long });
+    __guide.highlight("#target", "Target");
+  },
+  // The panel starts clear of the target, then grows over it when an answer is added.
+  async grow() {
+    __guide.show({ step: 1, total: 2, title: "Grow", html: "<p>Short.</p>" });
+    __guide.highlight("#target", "Target");
+    await sleep(2000);
+    if (overlaps(panelRect(), targetRect())) throw new Error(`setup: panel ${box(panelRect())} already covers target`);
+    __guide.say(long);
+  },
+};
+
+function panelRect() {
+  return document.getElementById("__guide-host").shadowRoot.querySelector(".panel").getBoundingClientRect();
+}
+function targetRect() {
+  return document.getElementById("target").getBoundingClientRect();
+}
+
+async function runCase(name) {
+  document.body.insertAdjacentHTML("afterbegin", '<div class="spacer"></div><div id="target">target</div><div class="spacer"></div>');
+  sessionStorage.clear();
+  const script = document.createElement("script");
+  script.src = `../guide-panel.js?${Date.now()}`; // never a cached copy
+  await new Promise((resolve, reject) => { script.onload = resolve; script.onerror = reject; document.head.append(script); });
+  try {
+    await cases[name]();
+    await sleep(2000);
+    const panel = panelRect();
+    const target = targetRect();
+    return overlaps(panel, target) ? `FAIL panel ${box(panel)} covers target ${box(target)}` : `PASS panel ${box(panel)} target ${box(target)}`;
+  } catch (error) {
+    return `FAIL ${error.message}`;
+  }
+}
+
+async function runAll() {
+  const lines = [];
+  for (const name of Object.keys(cases)) {
+    const frame = document.createElement("iframe");
+    const done = new Promise((resolve) => {
+      addEventListener("message", function onMessage(e) {
+        if (e.source !== frame.contentWindow) return;
+        removeEventListener("message", onMessage);
+        resolve(e.data);
+      });
+    });
+    frame.src = `?case=${name}`;
+    document.body.append(frame);
+    lines.push(`${name}: ${await done}`);
+    frame.remove();
+  }
+  const ok = lines.every((line) => line.includes(": PASS"));
+  document.getElementById("result").textContent = `RESULT: ${ok ? "PASS" : "FAIL"}\n${lines.join("\n")}`;
+}
+
+const name = new URLSearchParams(location.search).get("case");
+if (name) runCase(name).then((outcome) => parent.postMessage(outcome, location.origin));
+else runAll();
+</script>
+</body>
+</html>

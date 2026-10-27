@@ -300,7 +300,27 @@
   addEventListener("scroll", replace, true);
   addEventListener("resize", () => { replace(); fit(); });
 
+  // Re-check the corner whenever the highlights or the panel move or change size.
+  const keepClear = () => {
+    if (highlights.length && !panel.classList.contains("dragging")) moveAside(highlights.map((h) => h.el));
+  };
+  addEventListener("scrollend", keepClear, true);
+  new ResizeObserver(keepClear).observe(panel);
+
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  // Resolve once the element has stopped moving, i.e. a smooth scroll has finished.
+  async function settle(el, maxMs = 2000) {
+    const until = Date.now() + maxMs;
+    let last = "";
+    let still = 0;
+    while (still < 6 && Date.now() < until) {
+      await sleep(16);
+      const r = el.getBoundingClientRect();
+      const now = `${r.left},${r.top}`;
+      still = now === last ? still + 1 : 0;
+      last = now;
+    }
+  }
 
   window.__guide = {
     connect(relayUrl) { write({ relay: relayUrl }); },
@@ -347,7 +367,7 @@
       highlights.push({ box, el });
       $(".dim").style.display = "block";
       placeBox(box, el);
-      setTimeout(() => { placeBox(box, el); moveAside(highlights.map((h) => h.el)); }, 450);
+      settle(el).then(() => { placeBox(box, el); keepClear(); });
       return true;
     },
     clearHighlights() {
@@ -358,7 +378,7 @@
       const el = resolve(target);
       if (!el) return null;
       el.scrollIntoView({ block: "center", behavior: "smooth" });
-      await sleep(450);
+      await settle(el);
       moveAside([el, ...highlights.map((h) => h.el)]);
       const r = el.getBoundingClientRect();
       const x = Math.round(r.left + r.width / 2);
