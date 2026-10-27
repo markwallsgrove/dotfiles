@@ -38,6 +38,12 @@ const cases = {
     if (overlaps(panelRect(), targetRect())) throw new Error(`setup: panel ${box(panelRect())} already covers target`);
     __guide.say(long);
   },
+  // The target sits mid-screen where every corner would cover it, so the page must scroll.
+  async crowded() {
+    document.getElementById("target").style.marginLeft = "30%";
+    __guide.show({ step: 1, total: 2, title: "Crowded", html: long });
+    __guide.highlight("#target", "Target");
+  },
 };
 
 function panelRect() {
@@ -58,6 +64,7 @@ async function runCase(name) {
     await sleep(2000);
     const panel = panelRect();
     const target = targetRect();
+    if (target.top < 0 || target.bottom > innerHeight) return `FAIL target ${box(target)} is off screen`;
     return overlaps(panel, target) ? `FAIL panel ${box(panel)} covers target ${box(target)}` : `PASS panel ${box(panel)} target ${box(target)}`;
   } catch (error) {
     return `FAIL ${error.message}`;

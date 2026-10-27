@@ -271,9 +271,10 @@
   }
 
   // Move the panel to the corner that covers none of the given elements, so a
-  // highlight or the pointer's target is never hidden behind it.
+  // highlight or the pointer's target is never hidden behind it. With `scroll`, when
+  // every corner covers them, the page scrolls them near the top to free the bottom corners.
   const overlaps = (a, b) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
-  function moveAside(elements) {
+  function moveAside(elements, { scroll = false } = {}) {
     const targets = elements.map((el) => el.getBoundingClientRect());
     const current = panel.getBoundingClientRect();
     if (!targets.some((t) => overlaps(current, t))) return;
@@ -285,7 +286,16 @@
       { left: 16, top: 16 },
     ];
     const spot = corners.find((c) => !targets.some((t) => overlaps({ ...c, right: c.left + width, bottom: c.top + height }, t)));
-    if (!spot) return;
+    if (!spot) {
+      const top = Math.min(...targets.map((t) => t.top));
+      const bottom = Math.max(...targets.map((t) => t.bottom));
+      // 40px leaves room for the highlight label above the targets.
+      if (scroll && bottom - top + height + 72 <= innerHeight) {
+        scrollBy({ top: top - 40, behavior: "instant" });
+        moveAside(elements);
+      }
+      return;
+    }
     Object.assign(panel.style, { left: `${spot.left}px`, top: `${spot.top}px`, right: "auto", bottom: "auto" });
     write({ position: { left: panel.style.left, top: panel.style.top } });
     fit();
@@ -367,7 +377,7 @@
       highlights.push({ box, el });
       $(".dim").style.display = "block";
       placeBox(box, el);
-      settle(el).then(() => { placeBox(box, el); keepClear(); });
+      settle(el).then(() => { placeBox(box, el); moveAside(highlights.map((h) => h.el), { scroll: true }); });
       return true;
     },
     clearHighlights() {
@@ -379,7 +389,7 @@
       if (!el) return null;
       el.scrollIntoView({ block: "center", behavior: "smooth" });
       await settle(el);
-      moveAside([el, ...highlights.map((h) => h.el)]);
+      moveAside([el, ...highlights.map((h) => h.el)], { scroll: true });
       const r = el.getBoundingClientRect();
       const x = Math.round(r.left + r.width / 2);
       const y = Math.round(r.top + r.height / 2);
