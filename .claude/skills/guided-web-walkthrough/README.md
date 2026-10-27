@@ -2,7 +2,7 @@
 
 A Claude Code skill that walks you through a website in your own Chrome. Claude drives the site (real clicks and typing) and explains each step in a small panel on the page. You set the pace with **Next** / **Previous**, and you can type questions into the panel at any time.
 
-![Demo: a walkthrough of the Python docs](assets/demo.gif)
+![Demo: Claude explains how to use BBC Weather: search for a place, switch days, open an hour, answer a question](assets/demo.gif)
 
 ## What it is for
 
@@ -27,12 +27,24 @@ The panel sends each click and message to the relay, and the relay prints it as 
 - `SKILL.md`: the instructions Claude follows.
 - `guide-panel.js`: the panel. It works on any site; Claude passes in each step's content. The API is at the top of the file.
 - `guide-relay.py`: the event relay (Python standard library only).
+- `tests/panel-overlap.html`: browser test that the panel never covers a highlighted element.
 
 ## Use it
 
 Ask Claude something like:
 
 - "Walk me through the changes on this branch in the app."
-- "Give me a tour of docs.python.org."
+- "Explain how to use bbc.co.uk/weather."
 
 Requires the Claude in Chrome extension. On sites you don't own, Claude asks before it creates, changes, sends, buys or deletes anything. You type credentials and payment details yourself.
+
+## Test
+
+The test needs a real browser, because it relies on smooth scrolling:
+
+```sh
+python3 -m http.server -d ~/.claude/skills/guided-web-walkthrough 8000
+open http://127.0.0.1:8000/tests/panel-overlap.html
+```
+
+The page shows `RESULT: PASS` or `RESULT: FAIL`, with one line per case.
