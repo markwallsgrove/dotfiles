@@ -8,14 +8,22 @@
 //   say(html)                  answer the viewer's latest message; the step text stays,
 //                              and each question with its answer stacks below it
 //   status(text)               small status line
-//   busy(isBusy)               disable the controls while the agent acts
+//   busy(isBusy)               while the agent acts: a spinner replaces the step's text and
+//                              the controls are disabled
+//   autoplay(seconds | true)   hands-free mode for recordings: hide the viewer's controls;
+//                              once the agent is idle (busy(false), highlights settled) each
+//                              step stays up for `seconds`, or with `true` for the time a
+//                              slow-to-medium reader needs, then Next (or Close) fires itself.
+//                              autoplay(false) turns it off
 //   waitForEvent(timeoutMs)    next viewer event { type: "next"|"prev"|"message"|"close", text?, step }
 //                              or null on timeout; resolves the moment it happens
 //   highlight(target, label?)  outline an element (selector, element, or visible text);
-//                              the panel moves aside if it would cover it
+//                              the panel moves aside if it would cover it. Throws if
+//                              nothing visible matches
 //   clearHighlights()
 //   pointTo(target)            glide the visible pointer to an element; returns its
-//                              centre { x, y, viewportWidth } in CSS px
+//                              centre { x, y, viewportWidth } in CSS px. Throws if
+//                              nothing visible matches
 //   find(text)                 first visible element whose text or label matches
 //
 // On the last step Next becomes Close: it removes the panel, forgets its state, and
@@ -39,13 +47,17 @@
   host.id = "__guide-host";
   host.style.cssText = "all:initial;position:fixed;inset:0;pointer-events:none;z-index:2147483647";
   const root = host.attachShadow({ mode: "open" });
-  root.innerHTML = `
-<style>
-  :host { --ink:#1f1b2e; --accent:#8b6cf0; --soft:#f4f2fb; --muted:#b9a8ff; --line:#3a3352; }
+  // Adopted (constructed) stylesheet: unlike a <style> element, it still applies on sites
+  // whose Content-Security-Policy blocks inline styles.
+  const sheet = new CSSStyleSheet();
+  sheet.replaceSync(`
+  /* "Dusty blue on sand": muted pastels from the Radix Colors sand scale, with WCAG AA text contrast. */
+  :host { --panel:#f9f9f8; --text:#21201c; --muted:#63635e; --line:#e9e8e6; --border:#dad9d6; --field:#ffffff;
+    --code:#f1f0ef; --placeholder:#8d8d86; --question:#e6ecf2; --accent:#4f6f8f; --on-accent:#ffffff; }
   .panel { position:fixed; right:16px; bottom:16px; width:390px; max-height:70vh;
-    display:flex; flex-direction:column; pointer-events:auto; background:var(--ink); color:var(--soft);
-    font:14px/1.5 system-ui,-apple-system,sans-serif; border:2px solid var(--accent); border-radius:14px;
-    box-shadow:0 16px 48px rgba(0,0,0,.35); cursor:grab; user-select:none; transition:left .35s ease, top .35s ease; }
+    display:flex; flex-direction:column; pointer-events:auto; background:var(--panel); color:var(--text);
+    font:14px/1.5 system-ui,-apple-system,sans-serif; border:2px solid var(--border); border-radius:14px;
+    box-shadow:0 12px 36px rgba(30,30,60,.18); cursor:grab; user-select:none; transition:left .35s ease, top .35s ease; }
   .panel.dragging { cursor:grabbing; transition:none; }
   .grip { position:absolute; right:3px; bottom:3px; width:14px; height:14px; cursor:nwse-resize;
     background:linear-gradient(135deg, transparent 50%, var(--muted) 50%, var(--muted) 60%, transparent 60%,
@@ -54,57 +66,71 @@
   .step { font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); }
   .title { font-weight:700; font-size:17px; margin-top:2px; }
   .scroll { flex:1 1 auto; min-height:0; overflow-y:scroll; padding:4px 10px 10px 16px; cursor:auto; user-select:text;
-    scrollbar-width:thin; scrollbar-color:var(--accent) #2a2440; }
+    scrollbar-width:thin; scrollbar-color:var(--accent) var(--line); }
   .scroll::-webkit-scrollbar { width:8px; }
-  .scroll::-webkit-scrollbar-track { background:#2a2440; border-radius:8px; }
+  .scroll::-webkit-scrollbar-track { background:var(--line); border-radius:8px; }
   .scroll::-webkit-scrollbar-thumb { background:var(--accent); border-radius:8px; }
   .scroll p { margin:0 0 9px; }
-  .scroll code { background:#2e2845; padding:1px 5px; border-radius:4px; font-size:12.5px; }
-  .scroll pre { background:#120f1d; color:#d9d2ff; padding:8px; border-radius:8px; font-size:12px;
+  .scroll code { background:var(--code); padding:1px 5px; border-radius:4px; font-size:12.5px; }
+  .scroll pre { background:var(--code); color:var(--text); padding:8px; border-radius:8px; font-size:12px;
     white-space:pre-wrap; word-break:break-all; max-height:240px; overflow:auto; }
-  .tag { display:inline-block; background:var(--accent); color:#fff; border-radius:999px; padding:0 8px;
+  .tag { display:inline-block; background:var(--accent); color:var(--on-accent); border-radius:999px; padding:0 8px;
     font-size:12px; font-weight:700; margin-right:4px; }
   .thread:empty { display:none; }
   .thread { border-top:1px dashed var(--line); margin-top:4px; padding-top:10px; }
-  .q { margin:0 0 6px auto; max-width:85%; width:fit-content; background:var(--line); border-radius:10px 10px 2px 10px; padding:6px 10px; }
-  .a { border-left:3px solid var(--accent); background:#2a2440; border-radius:8px; padding:8px 10px; margin:0 0 10px; }
+  .q { margin:0 0 6px auto; max-width:85%; width:fit-content; background:var(--question); border-radius:10px 10px 2px 10px; padding:6px 10px; }
+  .a { border-left:3px solid var(--accent); background:var(--field); border-radius:8px; padding:8px 10px; margin:0 0 10px; }
   .a.pending { color:var(--muted); font-style:italic; }
   .status { padding:0 16px 6px; font-size:12px; color:var(--muted); min-height:18px; }
   .ask { display:flex; gap:6px; padding:8px 16px 0; border-top:1px solid var(--line); }
-  textarea { flex:1; resize:none; height:38px; background:#2a2440; color:var(--soft); border:1px solid var(--line);
+  textarea { flex:1; resize:none; height:38px; background:var(--field); color:var(--text); border:1px solid var(--line);
     border-radius:8px; padding:8px; font:13px system-ui; cursor:text; user-select:text; }
-  textarea::placeholder { color:#8f86ad; }
+  textarea::placeholder { color:var(--placeholder); }
   .nav { display:flex; gap:8px; padding:10px 16px 14px; }
   button { font:600 14px system-ui; padding:10px; border-radius:10px; border:0; cursor:pointer; }
   .nav button { flex:1; }
-  .prev { background:var(--line); color:var(--soft); }
-  .next { background:var(--accent); color:#fff; }
-  .send { background:var(--line); color:var(--soft); padding:0 12px; font-size:13px; }
+  .prev { background:var(--line); color:var(--text); }
+  .next { background:var(--accent); color:var(--on-accent); }
+  .send { background:var(--line); color:var(--text); padding:0 12px; font-size:13px; }
   button:disabled { opacity:.45; cursor:default; }
   .min { position:absolute; top:8px; right:10px; padding:2px 8px; font-size:12px; background:transparent; color:var(--muted); }
   .panel.collapsed .scroll, .panel.collapsed .status, .panel.collapsed .ask { display:none; }
-  .dim { position:fixed; inset:0; background:rgba(31,27,46,.18); pointer-events:none; display:none; }
-  .hl { position:fixed; border:3px solid var(--accent); border-radius:8px; background:rgba(139,108,240,.06);
+  .panel.auto .ask, .panel.auto .nav { display:none; }
+  .countdown { display:none; padding:6px 16px 14px; font-size:12px; color:var(--muted); }
+  .panel.auto .countdown { display:block; }
+  .countdown .bar { height:4px; margin-top:6px; border-radius:4px; background:var(--accent); transform-origin:left; }
+  .working { display:none; align-items:center; gap:10px; padding:16px; font-size:13px; color:var(--muted); }
+  .spinner { width:18px; height:18px; border-radius:50%; border:3px solid var(--line); border-top-color:var(--accent);
+    animation:spin .8s linear infinite; }
+  @keyframes spin { to { transform:rotate(360deg) } }
+  .panel.busy .head, .panel.busy .scroll, .panel.busy .status, .panel.busy .countdown { display:none; }
+  .panel.busy .working { display:flex; }
+  .dim { position:fixed; inset:0; background:rgba(20,20,40,.08); pointer-events:none; display:none; }
+  .hl { position:fixed; border:3px solid var(--accent); border-radius:8px; background:color-mix(in srgb, var(--accent) 8%, transparent);
     transition:all .35s ease; pointer-events:none; }
-  .hl-label { position:absolute; left:-3px; top:-28px; background:var(--accent); color:#fff;
+  .hl-label { position:absolute; left:-3px; top:-28px; background:var(--accent); color:var(--on-accent);
     font:600 12px system-ui; padding:3px 8px; border-radius:6px; white-space:nowrap; }
   .pointer { position:fixed; width:22px; height:22px; margin:-4px 0 0 -4px; transition:left .7s ease, top .7s ease;
     pointer-events:none; filter:drop-shadow(0 2px 3px rgba(0,0,0,.4)); }
   .pointer.pulse::after { content:""; position:absolute; left:-10px; top:-10px; width:40px; height:40px;
     border-radius:50%; border:3px solid var(--accent); animation:pulse .6s ease-out; }
   @keyframes pulse { from { transform:scale(.3); opacity:1 } to { transform:scale(1.2); opacity:0 } }
-</style>
+`);
+  root.adoptedStyleSheets = [sheet];
+  root.innerHTML = `
 <div class="dim"></div>
 <div class="panel">
   <button class="min" title="Collapse">–</button>
   <div class="head"><div class="step"></div><div class="title"></div></div>
+  <div class="working"><div class="spinner"></div><span>Working on the next step…</span></div>
   <div class="scroll"><div class="body"></div><div class="thread"></div></div>
   <div class="status"></div>
   <div class="ask"><textarea placeholder="Ask a question or report an issue…"></textarea><button class="send">Send</button></div>
   <div class="nav"><button class="prev">← Previous</button><button class="next">Next →</button></div>
+  <div class="countdown"><span class="left"></span><div class="bar"></div></div>
   <div class="grip" title="Resize"></div>
 </div>
-<svg class="pointer" viewBox="0 0 24 24" style="left:-40px;top:-40px">
+<svg class="pointer" viewBox="0 0 24 24">
   <path d="M3 2l7 19 2.6-7.4L20 11z" fill="#fff" stroke="#1f1b2e" stroke-width="1.6" stroke-linejoin="round"/>
 </svg>`;
   document.documentElement.appendChild(host);
@@ -112,6 +138,7 @@
   const $ = (sel) => root.querySelector(sel);
   const panel = $(".panel");
   const pointer = $(".pointer");
+  Object.assign(pointer.style, { left: "-40px", top: "-40px" });
   const input = $("textarea");
   let busyFlag = false;
 
@@ -144,6 +171,7 @@
   }
   const isLastStep = () => { const s = read(); return Boolean(s.step && s.total && s.step >= s.total); };
   function close() {
+    stopCountdown();
     emit({ type: "close" });
     ["__guide_state", "__guide_src"].forEach((key) => { try { sessionStorage.removeItem(key); } catch { /* storage blocked */ } });
     host.remove();
@@ -234,7 +262,9 @@
     $(".next").textContent = last ? "Close" : "Next →";
     $(".next").disabled = busyFlag;
     $(".send").disabled = busyFlag;
-    if (state.position) Object.assign(panel.style, { ...state.position, right: "auto", bottom: "auto" });
+    panel.classList.toggle("auto", Boolean(state.autoplay));
+    panel.classList.toggle("busy", busyFlag);
+    if (state.position) Object.assign(panel.style, { right: "auto", bottom: "auto", ...state.position });
     if (state.size) Object.assign(panel.style, state.size);
     fit();
   }
@@ -242,16 +272,25 @@
   // Keep the panel on screen, controls included: the text area scrolls instead of
   // the panel growing. Until the viewer resizes it, it is also capped at 70% height.
   function fit() {
-    const top = panel.style.top ? parseFloat(panel.style.top) : null;
+    const top = panel.style.top && panel.style.top !== "auto" ? parseFloat(panel.style.top) : null;
     const room = top === null ? innerHeight - 32 : innerHeight - top - 16;
     const cap = read().size ? room : Math.min(innerHeight * 0.7, room);
     panel.style.maxHeight = `${Math.max(200, cap)}px`;
   }
 
+  // Screen-reader-only text is sized 1px or less, so it counts as hidden too.
   const isVisible = (el) => {
     const r = el.getBoundingClientRect();
-    return r.width > 0 && r.height > 0 && getComputedStyle(el).visibility !== "hidden";
+    const style = getComputedStyle(el);
+    return r.width > 1 && r.height > 1 && style.visibility !== "hidden" && style.opacity !== "0";
   };
+  // The visible element a target names, or an error saying what didn't match.
+  function visibleTarget(target, caller) {
+    const el = resolve(target);
+    if (!el) throw new Error(`${caller}: nothing matches ${String(target)}`);
+    if (!isVisible(el)) throw new Error(`${caller}: ${String(target)} is not visible`);
+    return el;
+  }
   function find(text) {
     const want = text.trim().toLowerCase();
     const leaves = [...document.querySelectorAll("body *")].filter(
@@ -279,11 +318,12 @@
     const current = panel.getBoundingClientRect();
     if (!targets.some((t) => overlaps(current, t))) return;
     const { width, height } = current;
+    // `atRight` / `atBottom` pin the panel to that edge, so it grows away from it.
     const corners = [
-      { left: innerWidth - width - 16, top: innerHeight - height - 16 },
-      { left: 16, top: innerHeight - height - 16 },
-      { left: innerWidth - width - 16, top: 16 },
-      { left: 16, top: 16 },
+      { left: innerWidth - width - 16, top: innerHeight - height - 16, atRight: true, atBottom: true },
+      { left: 16, top: innerHeight - height - 16, atRight: false, atBottom: true },
+      { left: innerWidth - width - 16, top: 16, atRight: true, atBottom: false },
+      { left: 16, top: 16, atRight: false, atBottom: false },
     ];
     const spot = corners.find((c) => !targets.some((t) => overlaps({ ...c, right: c.left + width, bottom: c.top + height }, t)));
     if (!spot) {
@@ -296,8 +336,14 @@
       }
       return;
     }
-    Object.assign(panel.style, { left: `${spot.left}px`, top: `${spot.top}px`, right: "auto", bottom: "auto" });
-    write({ position: { left: panel.style.left, top: panel.style.top } });
+    const position = {
+      left: spot.atRight ? "auto" : "16px",
+      right: spot.atRight ? "16px" : "auto",
+      top: spot.atBottom ? "auto" : "16px",
+      bottom: spot.atBottom ? "16px" : "auto",
+    };
+    Object.assign(panel.style, position);
+    write({ position });
     fit();
   }
 
@@ -331,10 +377,58 @@
       last = now;
     }
   }
+  // Highlights still scrolling into place; the autoplay countdown waits for them.
+  let settling = Promise.resolve();
+
+  // Seconds a slow-to-medium reader needs for a step: 180 words a minute, plus 2 s to
+  // find the text and glance at the highlights, and never under 5 s.
+  function readingSeconds({ title = "", html = "" }) {
+    // A space before each tag keeps words apart across <br>, </p> and similar.
+    const body = new DOMParser().parseFromString(html.replace(/</g, " <"), "text/html").body.textContent;
+    const words = `${title} ${body}`.match(/[\p{L}\p{N}]+(?:['’-][\p{L}\p{N}]+)*/gu)?.length ?? 0;
+    return Math.max(5, Math.ceil(2 + (words / 180) * 60));
+  }
+
+  // Autoplay countdown: shown once the step's actions are done, then fires Next or Close.
+  let countdown = null;
+  function stopCountdown() {
+    if (countdown) { clearInterval(countdown.tick); clearTimeout(countdown.end); }
+    countdown = null;
+    $(".countdown .left").textContent = "";
+  }
+  function startCountdown() {
+    stopCountdown();
+    const state = read();
+    if (!state.autoplay || !state.step) return;
+    const seconds = state.autoplay === true ? readingSeconds(state) : state.autoplay;
+    const run = {};
+    countdown = run;
+    const last = isLastStep();
+    const label = (left) => { $(".countdown .left").textContent = `${last ? "Closing" : "Next step"} in ${left}s`; };
+    label(seconds);
+    settling.then(() => {
+      if (countdown !== run) return;
+      const ends = Date.now() + seconds * 1000;
+      const bar = $(".countdown .bar");
+      bar.style.transition = "none";
+      bar.style.transform = "scaleX(1)";
+      void bar.getBoundingClientRect();
+      bar.style.transition = `transform ${seconds}s linear`;
+      bar.style.transform = "scaleX(0)";
+      run.tick = setInterval(() => label(Math.max(1, Math.ceil((ends - Date.now()) / 1000))), 200);
+      run.end = setTimeout(() => {
+        stopCountdown();
+        if (last) close(); else navigate("next");
+      }, seconds * 1000);
+    });
+  }
 
   window.__guide = {
     connect(relayUrl) { write({ relay: relayUrl }); },
-    show({ step, total, title, html }) { render(write({ step, total, title, html, thread: [], status: "" })); },
+    show({ step, total, title, html }) {
+      render(write({ step, total, title, html, thread: [], status: "" }));
+      if (!busyFlag) startCountdown();
+    },
     say(html) {
       const thread = [...(read().thread ?? [])];
       const open = thread.findLastIndex((entry) => entry.answer === null);
@@ -347,7 +441,12 @@
     busy(isBusy) {
       busyFlag = isBusy;
       render(read());
-      if (isBusy) $(".status").textContent = "Working…";
+      if (isBusy) stopCountdown(); else startCountdown();
+    },
+    autoplay(seconds) {
+      render(write({ autoplay: seconds }));
+      if (!seconds) stopCountdown();
+      else if (!busyFlag) startCountdown();
     },
     waitForEvent(timeoutMs = 25000) {
       if (queue.length) return Promise.resolve(queue.shift());
@@ -362,8 +461,7 @@
       });
     },
     highlight(target, label) {
-      const el = resolve(target);
-      if (!el) return false;
+      const el = visibleTarget(target, "highlight");
       el.scrollIntoView({ block: "center", behavior: "smooth" });
       const box = document.createElement("div");
       box.className = "hl";
@@ -377,7 +475,8 @@
       highlights.push({ box, el });
       $(".dim").style.display = "block";
       placeBox(box, el);
-      settle(el).then(() => { placeBox(box, el); moveAside(highlights.map((h) => h.el), { scroll: true }); });
+      const placed = settle(el).then(() => { placeBox(box, el); moveAside(highlights.map((h) => h.el), { scroll: true }); });
+      settling = Promise.all([settling, placed]);
       return true;
     },
     clearHighlights() {
@@ -385,8 +484,7 @@
       $(".dim").style.display = "none";
     },
     async pointTo(target) {
-      const el = resolve(target);
-      if (!el) return null;
+      const el = visibleTarget(target, "pointTo");
       el.scrollIntoView({ block: "center", behavior: "smooth" });
       await settle(el);
       moveAside([el, ...highlights.map((h) => h.el)], { scroll: true });

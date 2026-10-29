@@ -1,0 +1,256 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>guide-panel test</title>
+<style>
+  body { margin: 0; font: 16px system-ui, sans-serif; }
+  .spacer { height: 6000px; }
+  #target { margin-left: 55%; width: 40%; height: 60px; background: #ddd; }
+  iframe { width: 1040px; height: 697px; border: 1px solid #999; display: block; }
+</style>
+</head>
+<body>
+<pre id="result">pending</pre>
+<script>
+// Browser tests for guide-panel.js. Needs a real browser (smooth scrolling), served
+// over http from the skill folder:
+//   python3 -m http.server -d ~/.claude/skills/guided-web-walkthrough 8000
+//   open http://127.0.0.1:8000/tests/panel.html
+// With no ?case= the page runs every case in an iframe and writes "RESULT: PASS" or
+// "RESULT: FAIL" plus one line per case to #result.
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const overlaps = (a, b) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+const box = (r) => `${Math.round(r.left)},${Math.round(r.top)} ${Math.round(r.width)}x${Math.round(r.height)}`;
+const long = `<p>${"Some explanation text. ".repeat(30)}</p>`;
+
+// Each case resolves to "PASS ..." or "FAIL ...".
+const cases = {
+  // The target starts off screen, so the panel must move once the smooth scroll ends.
+  async scroll() {
+    __guide.show({ step: 1, total: 2, title: "Scroll", html: long });
+    __guide.highlight("#target", "Target");
+    await sleep(2000);
+    return checkClear();
+  },
+  // The panel starts clear of the target, then grows over it when an answer is added.
+  async grow() {
+    __guide.show({ step: 1, total: 2, title: "Grow", html: "<p>Short.</p>" });
+    __guide.highlight("#target", "Target");
+    await sleep(2000);
+    if (overlaps(panelRect(), targetRect())) return `FAIL setup: panel ${box(panelRect())} already covers target`;
+    __guide.say(long);
+    await sleep(2000);
+    return checkClear();
+  },
+  // The target sits mid-screen where every corner would cover it, so the page must scroll.
+  async crowded() {
+    document.getElementById("target").style.marginLeft = "30%";
+    __guide.show({ step: 1, total: 2, title: "Crowded", html: long });
+    __guide.highlight("#target", "Target");
+    await sleep(2000);
+    return checkClear();
+  },
+  // A small (busy) panel moved to a bottom corner must grow upward when the step text arrives.
+  async growsAfterMovingAside() {
+    document.body.insertAdjacentHTML("beforeend",
+      '<div id="corner" style="position:fixed; right:20px; bottom:20px; width:300px; height:40px"></div>');
+    __guide.busy(true);
+    __guide.highlight("#corner", "Corner");
+    await sleep(1500);
+    __guide.show({ step: 1, total: 2, title: "Grow up", html: long });
+    __guide.busy(false);
+    await sleep(1500);
+    const panel = panelRect();
+    if (panel.bottom > innerHeight || panel.top < 0) return `FAIL panel ${box(panel)} runs off screen`;
+    return panel.height >= 300 ? `PASS panel ${box(panel)}` : `FAIL panel ${box(panel)} is squashed`;
+  },
+  // Sites with a strict style-src (no inline styles, e.g. GOV.UK) must still style the panel.
+  async strictStylePolicy() {
+    __guide.show({ step: 1, total: 2, title: "Styled", html: "<p>Text.</p>" });
+    const style = getComputedStyle(panelPart(".panel"));
+    if (style.position !== "fixed") return `FAIL panel is unstyled (position ${style.position})`;
+    return panelRect().width <= 400 ? "PASS" : `FAIL panel is ${Math.round(panelRect().width)}px wide`;
+  },
+  // Screen-reader-only text (1px, clipped) is not something to show the viewer.
+  async findSkipsVisuallyHidden() {
+    document.body.insertAdjacentHTML("afterbegin", `<h3 style="position:absolute; width:1px; height:1px; overflow:hidden;
+      clip-path:inset(50%); white-space:nowrap">Hidden heading</h3>`);
+    const found = __guide.find("Hidden heading");
+    return found ? `FAIL find returned the hidden <${found.tagName.toLowerCase()}>` : "PASS";
+  },
+  // Highlighting nothing must fail loudly, so a wrong selector is noticed at once.
+  async highlightRejectsMissing() {
+    try {
+      __guide.highlight("#does-not-exist", "Missing");
+    } catch {
+      return "PASS";
+    }
+    return "FAIL highlight of a missing element did not throw";
+  },
+  // A hidden element must not be highlighted, and the page must not scroll to it.
+  async highlightRejectsHidden() {
+    document.body.insertAdjacentHTML("beforeend", `<h3 id="sr-only" style="position:absolute; width:1px; height:1px;
+      overflow:hidden; clip-path:inset(50%)">Hidden</h3>`);
+    const before = scrollY;
+    try {
+      __guide.highlight(document.getElementById("sr-only"), "Hidden");
+    } catch {
+      await sleep(800);
+      return scrollY === before ? "PASS" : `FAIL page scrolled from ${before} to ${scrollY}`;
+    }
+    return "FAIL highlight of a hidden element did not throw";
+  },
+  // pointTo fails the same way, so a click is never aimed at nothing.
+  async pointToRejectsMissing() {
+    try {
+      await __guide.pointTo("#does-not-exist");
+    } catch {
+      return "PASS";
+    }
+    return "FAIL pointTo of a missing element did not throw";
+  },
+  // While the agent works, the previous step's text gives way to a spinner.
+  async busyShowsSpinner() {
+    __guide.show({ step: 1, total: 3, title: "Previous title", html: "<p>Previous text.</p>" });
+    const shown = (sel) => getComputedStyle(panelPart(sel)).display !== "none";
+    __guide.busy(true);
+    if (shown(".head") || shown(".scroll")) return "FAIL previous step is visible while busy";
+    if (!shown(".working")) return "FAIL spinner is hidden while busy";
+    __guide.busy(false);
+    if (!shown(".head") || !shown(".scroll")) return "FAIL step is hidden after busy";
+    return shown(".working") ? "FAIL spinner is visible after busy" : "PASS";
+  },
+  // Autoplay hides the viewer's controls and shows the countdown instead.
+  async autoplayHidesControls() {
+    __guide.autoplay(1);
+    __guide.show({ step: 1, total: 3, title: "Auto", html: "<p>Text.</p>" });
+    const shown = (sel) => getComputedStyle(panelPart(sel)).display !== "none";
+    if (shown(".ask")) return "FAIL message box is visible";
+    if (shown(".nav")) return "FAIL Previous/Next are visible";
+    if (!shown(".countdown")) return "FAIL countdown is hidden";
+    const text = panelPart(".countdown").textContent;
+    return /Next step in 1s/.test(text) ? "PASS" : `FAIL countdown reads "${text}"`;
+  },
+  // autoplay(true) sizes each step's countdown to its text: 2 s + 180 words a minute.
+  async autoplayPredictsReadingTime() {
+    __guide.autoplay(true);
+    // "Auto" plus 59 words in the body: 60 words, 2 + 60 / 180 * 60 = 22 s.
+    __guide.show({ step: 1, total: 3, title: "Auto", html: `<p>${"<b>word</b> ".repeat(59)}</p>` });
+    const text = panelPart(".countdown").textContent;
+    return /Next step in 22s/.test(text) ? "PASS" : `FAIL countdown reads "${text}"`;
+  },
+  // Words split by tags still count separately, and lone punctuation is not a word.
+  async autoplayCountsWordsAcrossTags() {
+    __guide.autoplay(true);
+    // "Auto" plus 60 words split by <br>, plus 10 lone dashes: 61 words, 2 + 61 / 180 * 60 = 22.3, so 23 s.
+    __guide.show({ step: 1, total: 3, title: "Auto", html: `<p>${"word<br>word ".repeat(30)}${" - ".repeat(10)}</p>` });
+    const text = panelPart(".countdown").textContent;
+    return /Next step in 23s/.test(text) ? "PASS" : `FAIL countdown reads "${text}"`;
+  },
+  // Short text still gets the 5 s floor, so a viewer can pause the video.
+  async autoplayPredictsMinimum() {
+    __guide.autoplay(true);
+    __guide.show({ step: 1, total: 3, title: "Auto", html: "<p>Two words.</p>" });
+    const text = panelPart(".countdown").textContent;
+    return /Next step in 5s/.test(text) ? "PASS" : `FAIL countdown reads "${text}"`;
+  },
+  // The countdown only runs once the agent has finished acting (busy false).
+  async autoplayWaitsForBusy() {
+    __guide.autoplay(1);
+    __guide.busy(true);
+    __guide.show({ step: 1, total: 3, title: "Auto", html: "<p>Text.</p>" });
+    const early = await __guide.waitForEvent(1800);
+    if (early) return `FAIL "${early.type}" sent while busy`;
+    __guide.busy(false);
+    const start = Date.now();
+    const event = await __guide.waitForEvent(3000);
+    const elapsed = Date.now() - start;
+    if (event?.type !== "next") return `FAIL expected "next", got ${JSON.stringify(event)}`;
+    return elapsed >= 950 && elapsed <= 1600 ? `PASS next after ${elapsed} ms` : `FAIL next after ${elapsed} ms`;
+  },
+  // Starting the agent's work again stops a running countdown.
+  async autoplayBusyCancels() {
+    __guide.autoplay(1);
+    __guide.show({ step: 1, total: 3, title: "Auto", html: "<p>Text.</p>" });
+    await sleep(300);
+    __guide.busy(true);
+    const event = await __guide.waitForEvent(1800);
+    return event ? `FAIL "${event.type}" sent while busy` : "PASS";
+  },
+  // On the last step the countdown closes the walkthrough.
+  async autoplayCloses() {
+    __guide.autoplay(1);
+    __guide.show({ step: 3, total: 3, title: "Auto", html: "<p>Text.</p>" });
+    const text = panelPart(".countdown").textContent;
+    if (!/Closing in 1s/.test(text)) return `FAIL countdown reads "${text}"`;
+    const event = await __guide.waitForEvent(3000);
+    if (event?.type !== "close") return `FAIL expected "close", got ${JSON.stringify(event)}`;
+    return document.getElementById("__guide-host") ? "FAIL panel still present" : "PASS";
+  },
+};
+
+function panelPart(sel) {
+  return document.getElementById("__guide-host").shadowRoot.querySelector(sel);
+}
+function panelRect() {
+  return panelPart(".panel").getBoundingClientRect();
+}
+function targetRect() {
+  return document.getElementById("target").getBoundingClientRect();
+}
+function checkClear() {
+  const panel = panelRect();
+  const target = targetRect();
+  if (target.top < 0 || target.bottom > innerHeight) return `FAIL target ${box(target)} is off screen`;
+  return overlaps(panel, target) ? `FAIL panel ${box(panel)} covers target ${box(target)}` : `PASS panel ${box(panel)} target ${box(target)}`;
+}
+
+// Page set-up that must happen before the panel loads.
+const setups = {
+  strictStylePolicy() {
+    const policy = Object.assign(document.createElement("meta"), { httpEquiv: "Content-Security-Policy", content: "style-src 'self'" });
+    document.head.append(policy);
+  },
+};
+
+async function runCase(name) {
+  document.body.insertAdjacentHTML("afterbegin", '<div class="spacer"></div><div id="target">target</div><div class="spacer"></div>');
+  sessionStorage.clear();
+  setups[name]?.();
+  const script = document.createElement("script");
+  script.src = `../guide-panel.js?${Date.now()}`; // never a cached copy
+  await new Promise((resolve, reject) => { script.onload = resolve; script.onerror = reject; document.head.append(script); });
+  try {
+    return await cases[name]();
+  } catch (error) {
+    return `FAIL ${error.message}`;
+  }
+}
+
+async function runAll() {
+  const lines = [];
+  for (const name of Object.keys(cases)) {
+    const frame = document.createElement("iframe");
+    const done = new Promise((resolve) => {
+      addEventListener("message", function onMessage(e) {
+        if (e.source !== frame.contentWindow) return;
+        removeEventListener("message", onMessage);
+        resolve(e.data);
+      });
+    });
+    frame.src = `?case=${name}`;
+    document.body.append(frame);
+    lines.push(`${name}: ${await done}`);
+    frame.remove();
+  }
+  const ok = lines.every((line) => line.includes(": PASS"));
+  document.getElementById("result").textContent = `RESULT: ${ok ? "PASS" : "FAIL"}\n${lines.join("\n")}`;
+}
+
+const name = new URLSearchParams(location.search).get("case");
+if (name) runCase(name).then((outcome) => parent.postMessage(outcome, location.origin));
+else runAll();
+</script>
+</body>
+</html>

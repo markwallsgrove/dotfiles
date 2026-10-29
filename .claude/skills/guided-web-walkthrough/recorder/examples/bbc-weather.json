@@ -1,0 +1,79 @@
+{
+  "url": "https://www.bbc.co.uk/weather",
+  "steps": [
+    {
+      "title": "How to use BBC Weather",
+      "html": "<p>We'll cover:</p><p>1. Find the forecast for a place.<br>2. Switch between days.<br>3. Read the hour-by-hour detail.</p>",
+      "actions": [
+        {
+          "click": "button:has-text('Reject additional cookies')",
+          "optional": true
+        }
+      ]
+    },
+    {
+      "title": "Find a place",
+      "html": "<p>I typed <code>Manchester</code> into the search box and picked the first suggestion with the arrow keys and Enter.</p><p>The <b>Today</b> card gives the high and low and a short summary.</p>",
+      "actions": [
+        {
+          "click": "input[placeholder*='town, city'] >> visible=true"
+        },
+        {
+          "type": "Manchester"
+        },
+        {
+          "wait": 1500
+        },
+        {
+          "press": "ArrowDown"
+        },
+        {
+          "press": "Enter"
+        },
+        {
+          "waitFor": "#wr-location-name-id"
+        },
+        {
+          "highlight": "#wr-location-name-id",
+          "label": "Your place"
+        },
+        {
+          "highlight": ".wr-day--active",
+          "label": "Today"
+        }
+      ]
+    },
+    {
+      "title": "Switch between days",
+      "html": "<p>The day cards cover the next 14 days. I clicked the third card and it opened with that day's high, low and summary.</p>",
+      "actions": [
+        {
+          "click": "li.wr-day:nth-child(3)"
+        },
+        {
+          "wait": 800
+        },
+        {
+          "highlight": ".wr-day--active",
+          "label": "Selected day"
+        }
+      ]
+    },
+    {
+      "title": "Hour-by-hour detail",
+      "html": "<p>Each column is one hour. I clicked <b>12:00</b> to open its detail: humidity, pressure, visibility, 'feels like', rain and wind.</p>",
+      "actions": [
+        {
+          "click": "button.wr-time-slot__inner:has-text('12:00') >> visible=true"
+        },
+        {
+          "wait": 800
+        },
+        {
+          "highlight": ".wr-time-slot-secondary >> visible=true",
+          "label": "Hour detail"
+        }
+      ]
+    }
+  ]
+}
