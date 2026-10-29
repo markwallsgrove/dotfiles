@@ -9,10 +9,11 @@
 //                              and each question with its answer stacks below it
 //   status(text)               small status line
 //   busy(isBusy)               disable the controls while the agent acts
-//   autoplay(seconds)          hands-free mode for recordings: hide the viewer's controls;
+//   autoplay(seconds | true)   hands-free mode for recordings: hide the viewer's controls;
 //                              once the agent is idle (busy(false), highlights settled) each
-//                              step stays up for `seconds`, then Next (or Close) fires itself.
-//                              autoplay(0) turns it off
+//                              step stays up for `seconds`, or with `true` for the time a
+//                              slow-to-medium reader needs, then Next (or Close) fires itself.
+//                              autoplay(false) turns it off
 //   waitForEvent(timeoutMs)    next viewer event { type: "next"|"prev"|"message"|"close", text?, step }
 //                              or null on timeout; resolves the moment it happens
 //   highlight(target, label?)  outline an element (selector, element, or visible text);
@@ -345,6 +346,14 @@
   // Highlights still scrolling into place; the autoplay countdown waits for them.
   let settling = Promise.resolve();
 
+  // Seconds a slow-to-medium reader needs for a step: 180 words a minute, plus 2 s to
+  // find the text and glance at the highlights, and never under 5 s.
+  function readingSeconds({ title = "", html = "" }) {
+    const text = `${title} ${new DOMParser().parseFromString(html, "text/html").body.textContent}`;
+    const words = text.split(/\s+/).filter(Boolean).length;
+    return Math.max(5, Math.ceil(2 + (words / 180) * 60));
+  }
+
   // Autoplay countdown: shown once the step's actions are done, then fires Next or Close.
   let countdown = null;
   function stopCountdown() {
@@ -354,8 +363,9 @@
   }
   function startCountdown() {
     stopCountdown();
-    const seconds = read().autoplay;
-    if (!seconds || !read().step) return;
+    const state = read();
+    if (!state.autoplay || !state.step) return;
+    const seconds = state.autoplay === true ? readingSeconds(state) : state.autoplay;
     const run = {};
     countdown = run;
     const last = isLastStep();

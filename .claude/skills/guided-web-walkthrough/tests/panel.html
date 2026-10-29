@@ -62,6 +62,21 @@ const cases = {
     const text = panelPart(".countdown").textContent;
     return /Next step in 1s/.test(text) ? "PASS" : `FAIL countdown reads "${text}"`;
   },
+  // autoplay(true) sizes each step's countdown to its text: 2 s + 180 words a minute.
+  async autoplayPredictsReadingTime() {
+    __guide.autoplay(true);
+    // "Auto" plus 59 words in the body: 60 words, 2 + 60 / 180 * 60 = 22 s.
+    __guide.show({ step: 1, total: 3, title: "Auto", html: `<p>${"<b>word</b> ".repeat(59)}</p>` });
+    const text = panelPart(".countdown").textContent;
+    return /Next step in 22s/.test(text) ? "PASS" : `FAIL countdown reads "${text}"`;
+  },
+  // Short text still gets the 5 s floor, so a viewer can pause the video.
+  async autoplayPredictsMinimum() {
+    __guide.autoplay(true);
+    __guide.show({ step: 1, total: 3, title: "Auto", html: "<p>Two words.</p>" });
+    const text = panelPart(".countdown").textContent;
+    return /Next step in 5s/.test(text) ? "PASS" : `FAIL countdown reads "${text}"`;
+  },
   // The countdown only runs once the agent has finished acting (busy false).
   async autoplayWaitsForBusy() {
     __guide.autoplay(1);
