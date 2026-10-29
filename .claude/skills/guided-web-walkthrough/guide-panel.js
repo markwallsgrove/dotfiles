@@ -9,6 +9,10 @@
 //                              and each question with its answer stacks below it
 //   status(text)               small status line
 //   busy(isBusy)               disable the controls while the agent acts
+//   autoplay(seconds)          hands-free mode for recordings: hide the viewer's controls;
+//                              once the agent is idle (busy(false), highlights settled) each
+//                              step stays up for `seconds`, then Next (or Close) fires itself.
+//                              autoplay(0) turns it off
 //   waitForEvent(timeoutMs)    next viewer event { type: "next"|"prev"|"message"|"close", text?, step }
 //                              or null on timeout; resolves the moment it happens
 //   highlight(target, label?)  outline an element (selector, element, or visible text);
@@ -83,6 +87,10 @@
   button:disabled { opacity:.45; cursor:default; }
   .min { position:absolute; top:8px; right:10px; padding:2px 8px; font-size:12px; background:transparent; color:var(--muted); }
   .panel.collapsed .scroll, .panel.collapsed .status, .panel.collapsed .ask { display:none; }
+  .panel.auto .ask, .panel.auto .nav { display:none; }
+  .countdown { display:none; padding:6px 16px 14px; font-size:12px; color:var(--muted); }
+  .panel.auto .countdown { display:block; }
+  .countdown .bar { height:4px; margin-top:6px; border-radius:4px; background:var(--accent); transform-origin:left; }
   .dim { position:fixed; inset:0; background:rgba(31,27,46,.18); pointer-events:none; display:none; }
   .hl { position:fixed; border:3px solid var(--accent); border-radius:8px; background:rgba(139,108,240,.06);
     transition:all .35s ease; pointer-events:none; }
@@ -102,6 +110,7 @@
   <div class="status"></div>
   <div class="ask"><textarea placeholder="Ask a question or report an issue…"></textarea><button class="send">Send</button></div>
   <div class="nav"><button class="prev">← Previous</button><button class="next">Next →</button></div>
+  <div class="countdown"><span class="left"></span><div class="bar"></div></div>
   <div class="grip" title="Resize"></div>
 </div>
 <svg class="pointer" viewBox="0 0 24 24" style="left:-40px;top:-40px">
@@ -144,6 +153,7 @@
   }
   const isLastStep = () => { const s = read(); return Boolean(s.step && s.total && s.step >= s.total); };
   function close() {
+    stopCountdown();
     emit({ type: "close" });
     ["__guide_state", "__guide_src"].forEach((key) => { try { sessionStorage.removeItem(key); } catch { /* storage blocked */ } });
     host.remove();
@@ -234,6 +244,7 @@
     $(".next").textContent = last ? "Close" : "Next →";
     $(".next").disabled = busyFlag;
     $(".send").disabled = busyFlag;
+    panel.classList.toggle("auto", Boolean(state.autoplay));
     if (state.position) Object.assign(panel.style, { ...state.position, right: "auto", bottom: "auto" });
     if (state.size) Object.assign(panel.style, state.size);
     fit();
@@ -331,10 +342,48 @@
       last = now;
     }
   }
+  // Highlights still scrolling into place; the autoplay countdown waits for them.
+  let settling = Promise.resolve();
+
+  // Autoplay countdown: shown once the step's actions are done, then fires Next or Close.
+  let countdown = null;
+  function stopCountdown() {
+    if (countdown) { clearInterval(countdown.tick); clearTimeout(countdown.end); }
+    countdown = null;
+    $(".countdown .left").textContent = "";
+  }
+  function startCountdown() {
+    stopCountdown();
+    const seconds = read().autoplay;
+    if (!seconds || !read().step) return;
+    const run = {};
+    countdown = run;
+    const last = isLastStep();
+    const label = (left) => { $(".countdown .left").textContent = `${last ? "Closing" : "Next step"} in ${left}s`; };
+    label(seconds);
+    settling.then(() => {
+      if (countdown !== run) return;
+      const ends = Date.now() + seconds * 1000;
+      const bar = $(".countdown .bar");
+      bar.style.transition = "none";
+      bar.style.transform = "scaleX(1)";
+      void bar.getBoundingClientRect();
+      bar.style.transition = `transform ${seconds}s linear`;
+      bar.style.transform = "scaleX(0)";
+      run.tick = setInterval(() => label(Math.max(1, Math.ceil((ends - Date.now()) / 1000))), 200);
+      run.end = setTimeout(() => {
+        stopCountdown();
+        if (last) close(); else navigate("next");
+      }, seconds * 1000);
+    });
+  }
 
   window.__guide = {
     connect(relayUrl) { write({ relay: relayUrl }); },
-    show({ step, total, title, html }) { render(write({ step, total, title, html, thread: [], status: "" })); },
+    show({ step, total, title, html }) {
+      render(write({ step, total, title, html, thread: [], status: "" }));
+      if (!busyFlag) startCountdown();
+    },
     say(html) {
       const thread = [...(read().thread ?? [])];
       const open = thread.findLastIndex((entry) => entry.answer === null);
@@ -348,6 +397,12 @@
       busyFlag = isBusy;
       render(read());
       if (isBusy) $(".status").textContent = "Working…";
+      if (isBusy) stopCountdown(); else startCountdown();
+    },
+    autoplay(seconds) {
+      render(write({ autoplay: seconds }));
+      if (!seconds) stopCountdown();
+      else if (!busyFlag) startCountdown();
     },
     waitForEvent(timeoutMs = 25000) {
       if (queue.length) return Promise.resolve(queue.shift());
@@ -377,7 +432,8 @@
       highlights.push({ box, el });
       $(".dim").style.display = "block";
       placeBox(box, el);
-      settle(el).then(() => { placeBox(box, el); moveAside(highlights.map((h) => h.el), { scroll: true }); });
+      const placed = settle(el).then(() => { placeBox(box, el); moveAside(highlights.map((h) => h.el), { scroll: true }); });
+      settling = Promise.all([settling, placed]);
       return true;
     },
     clearHighlights() {
