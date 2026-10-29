@@ -51,6 +51,27 @@ const cases = {
     await sleep(2000);
     return checkClear();
   },
+  // A small (busy) panel moved to a bottom corner must grow upward when the step text arrives.
+  async growsAfterMovingAside() {
+    document.body.insertAdjacentHTML("beforeend",
+      '<div id="corner" style="position:fixed; right:20px; bottom:20px; width:300px; height:40px"></div>');
+    __guide.busy(true);
+    __guide.highlight("#corner", "Corner");
+    await sleep(1500);
+    __guide.show({ step: 1, total: 2, title: "Grow up", html: long });
+    __guide.busy(false);
+    await sleep(1500);
+    const panel = panelRect();
+    if (panel.bottom > innerHeight || panel.top < 0) return `FAIL panel ${box(panel)} runs off screen`;
+    return panel.height >= 300 ? `PASS panel ${box(panel)}` : `FAIL panel ${box(panel)} is squashed`;
+  },
+  // Sites with a strict style-src (no inline styles, e.g. GOV.UK) must still style the panel.
+  async strictStylePolicy() {
+    __guide.show({ step: 1, total: 2, title: "Styled", html: "<p>Text.</p>" });
+    const style = getComputedStyle(panelPart(".panel"));
+    if (style.position !== "fixed") return `FAIL panel is unstyled (position ${style.position})`;
+    return panelRect().width <= 400 ? "PASS" : `FAIL panel is ${Math.round(panelRect().width)}px wide`;
+  },
   // While the agent works, the previous step's text gives way to a spinner.
   async busyShowsSpinner() {
     __guide.show({ step: 1, total: 3, title: "Previous title", html: "<p>Previous text.</p>" });
@@ -147,9 +168,18 @@ function checkClear() {
   return overlaps(panel, target) ? `FAIL panel ${box(panel)} covers target ${box(target)}` : `PASS panel ${box(panel)} target ${box(target)}`;
 }
 
+// Page set-up that must happen before the panel loads.
+const setups = {
+  strictStylePolicy() {
+    const policy = Object.assign(document.createElement("meta"), { httpEquiv: "Content-Security-Policy", content: "style-src 'self'" });
+    document.head.append(policy);
+  },
+};
+
 async function runCase(name) {
   document.body.insertAdjacentHTML("afterbegin", '<div class="spacer"></div><div id="target">target</div><div class="spacer"></div>');
   sessionStorage.clear();
+  setups[name]?.();
   const script = document.createElement("script");
   script.src = `../guide-panel.js?${Date.now()}`; // never a cached copy
   await new Promise((resolve, reject) => { script.onload = resolve; script.onerror = reject; document.head.append(script); });

@@ -45,8 +45,10 @@
   host.id = "__guide-host";
   host.style.cssText = "all:initial;position:fixed;inset:0;pointer-events:none;z-index:2147483647";
   const root = host.attachShadow({ mode: "open" });
-  root.innerHTML = `
-<style>
+  // Adopted (constructed) stylesheet: unlike a <style> element, it still applies on sites
+  // whose Content-Security-Policy blocks inline styles.
+  const sheet = new CSSStyleSheet();
+  sheet.replaceSync(`
   /* "Dusty blue on sand": muted pastels from the Radix Colors sand scale, with WCAG AA text contrast. */
   :host { --panel:#f9f9f8; --text:#21201c; --muted:#63635e; --line:#e9e8e6; --border:#dad9d6; --field:#ffffff;
     --code:#f1f0ef; --placeholder:#8d8d86; --question:#e6ecf2; --accent:#4f6f8f; --on-accent:#ffffff; }
@@ -111,7 +113,9 @@
   .pointer.pulse::after { content:""; position:absolute; left:-10px; top:-10px; width:40px; height:40px;
     border-radius:50%; border:3px solid var(--accent); animation:pulse .6s ease-out; }
   @keyframes pulse { from { transform:scale(.3); opacity:1 } to { transform:scale(1.2); opacity:0 } }
-</style>
+`);
+  root.adoptedStyleSheets = [sheet];
+  root.innerHTML = `
 <div class="dim"></div>
 <div class="panel">
   <button class="min" title="Collapse">–</button>
@@ -124,7 +128,7 @@
   <div class="countdown"><span class="left"></span><div class="bar"></div></div>
   <div class="grip" title="Resize"></div>
 </div>
-<svg class="pointer" viewBox="0 0 24 24" style="left:-40px;top:-40px">
+<svg class="pointer" viewBox="0 0 24 24">
   <path d="M3 2l7 19 2.6-7.4L20 11z" fill="#fff" stroke="#1f1b2e" stroke-width="1.6" stroke-linejoin="round"/>
 </svg>`;
   document.documentElement.appendChild(host);
@@ -132,6 +136,7 @@
   const $ = (sel) => root.querySelector(sel);
   const panel = $(".panel");
   const pointer = $(".pointer");
+  Object.assign(pointer.style, { left: "-40px", top: "-40px" });
   const input = $("textarea");
   let busyFlag = false;
 
@@ -257,7 +262,7 @@
     $(".send").disabled = busyFlag;
     panel.classList.toggle("auto", Boolean(state.autoplay));
     panel.classList.toggle("busy", busyFlag);
-    if (state.position) Object.assign(panel.style, { ...state.position, right: "auto", bottom: "auto" });
+    if (state.position) Object.assign(panel.style, { right: "auto", bottom: "auto", ...state.position });
     if (state.size) Object.assign(panel.style, state.size);
     fit();
   }
@@ -265,7 +270,7 @@
   // Keep the panel on screen, controls included: the text area scrolls instead of
   // the panel growing. Until the viewer resizes it, it is also capped at 70% height.
   function fit() {
-    const top = panel.style.top ? parseFloat(panel.style.top) : null;
+    const top = panel.style.top && panel.style.top !== "auto" ? parseFloat(panel.style.top) : null;
     const room = top === null ? innerHeight - 32 : innerHeight - top - 16;
     const cap = read().size ? room : Math.min(innerHeight * 0.7, room);
     panel.style.maxHeight = `${Math.max(200, cap)}px`;
@@ -302,11 +307,12 @@
     const current = panel.getBoundingClientRect();
     if (!targets.some((t) => overlaps(current, t))) return;
     const { width, height } = current;
+    // `atRight` / `atBottom` pin the panel to that edge, so it grows away from it.
     const corners = [
-      { left: innerWidth - width - 16, top: innerHeight - height - 16 },
-      { left: 16, top: innerHeight - height - 16 },
-      { left: innerWidth - width - 16, top: 16 },
-      { left: 16, top: 16 },
+      { left: innerWidth - width - 16, top: innerHeight - height - 16, atRight: true, atBottom: true },
+      { left: 16, top: innerHeight - height - 16, atRight: false, atBottom: true },
+      { left: innerWidth - width - 16, top: 16, atRight: true, atBottom: false },
+      { left: 16, top: 16, atRight: false, atBottom: false },
     ];
     const spot = corners.find((c) => !targets.some((t) => overlaps({ ...c, right: c.left + width, bottom: c.top + height }, t)));
     if (!spot) {
@@ -319,8 +325,14 @@
       }
       return;
     }
-    Object.assign(panel.style, { left: `${spot.left}px`, top: `${spot.top}px`, right: "auto", bottom: "auto" });
-    write({ position: { left: panel.style.left, top: panel.style.top } });
+    const position = {
+      left: spot.atRight ? "auto" : "16px",
+      right: spot.atRight ? "16px" : "auto",
+      top: spot.atBottom ? "auto" : "16px",
+      bottom: spot.atBottom ? "16px" : "auto",
+    };
+    Object.assign(panel.style, position);
+    write({ position });
     fit();
   }
 
