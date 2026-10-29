@@ -8,7 +8,8 @@
 //   say(html)                  answer the viewer's latest message; the step text stays,
 //                              and each question with its answer stacks below it
 //   status(text)               small status line
-//   busy(isBusy)               disable the controls while the agent acts
+//   busy(isBusy)               while the agent acts: a spinner replaces the step's text and
+//                              the controls are disabled
 //   autoplay(seconds | true)   hands-free mode for recordings: hide the viewer's controls;
 //                              once the agent is idle (busy(false), highlights settled) each
 //                              step stays up for `seconds`, or with `true` for the time a
@@ -92,6 +93,12 @@
   .countdown { display:none; padding:6px 16px 14px; font-size:12px; color:var(--muted); }
   .panel.auto .countdown { display:block; }
   .countdown .bar { height:4px; margin-top:6px; border-radius:4px; background:var(--accent); transform-origin:left; }
+  .working { display:none; align-items:center; gap:10px; padding:16px; font-size:13px; color:var(--muted); }
+  .spinner { width:18px; height:18px; border-radius:50%; border:3px solid var(--line); border-top-color:var(--accent);
+    animation:spin .8s linear infinite; }
+  @keyframes spin { to { transform:rotate(360deg) } }
+  .panel.busy .head, .panel.busy .scroll, .panel.busy .status, .panel.busy .countdown { display:none; }
+  .panel.busy .working { display:flex; }
   .dim { position:fixed; inset:0; background:rgba(31,27,46,.18); pointer-events:none; display:none; }
   .hl { position:fixed; border:3px solid var(--accent); border-radius:8px; background:rgba(139,108,240,.06);
     transition:all .35s ease; pointer-events:none; }
@@ -107,6 +114,7 @@
 <div class="panel">
   <button class="min" title="Collapse">–</button>
   <div class="head"><div class="step"></div><div class="title"></div></div>
+  <div class="working"><div class="spinner"></div><span>Working on the next step…</span></div>
   <div class="scroll"><div class="body"></div><div class="thread"></div></div>
   <div class="status"></div>
   <div class="ask"><textarea placeholder="Ask a question or report an issue…"></textarea><button class="send">Send</button></div>
@@ -246,6 +254,7 @@
     $(".next").disabled = busyFlag;
     $(".send").disabled = busyFlag;
     panel.classList.toggle("auto", Boolean(state.autoplay));
+    panel.classList.toggle("busy", busyFlag);
     if (state.position) Object.assign(panel.style, { ...state.position, right: "auto", bottom: "auto" });
     if (state.size) Object.assign(panel.style, state.size);
     fit();
@@ -407,7 +416,6 @@
     busy(isBusy) {
       busyFlag = isBusy;
       render(read());
-      if (isBusy) $(".status").textContent = "Working…";
       if (isBusy) stopCountdown(); else startCountdown();
     },
     autoplay(seconds) {

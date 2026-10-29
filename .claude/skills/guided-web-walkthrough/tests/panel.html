@@ -51,6 +51,17 @@ const cases = {
     await sleep(2000);
     return checkClear();
   },
+  // While the agent works, the previous step's text gives way to a spinner.
+  async busyShowsSpinner() {
+    __guide.show({ step: 1, total: 3, title: "Previous title", html: "<p>Previous text.</p>" });
+    const shown = (sel) => getComputedStyle(panelPart(sel)).display !== "none";
+    __guide.busy(true);
+    if (shown(".head") || shown(".scroll")) return "FAIL previous step is visible while busy";
+    if (!shown(".working")) return "FAIL spinner is hidden while busy";
+    __guide.busy(false);
+    if (!shown(".head") || !shown(".scroll")) return "FAIL step is hidden after busy";
+    return shown(".working") ? "FAIL spinner is visible after busy" : "PASS";
+  },
   // Autoplay hides the viewer's controls and shows the countdown instead.
   async autoplayHidesControls() {
     __guide.autoplay(1);
