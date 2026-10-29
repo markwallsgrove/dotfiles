@@ -1,0 +1,29 @@
+{
+  "url": "https://docs.python.org/3/",
+  "steps": [
+    {
+      "title": "Tour of the Python docs",
+      "html": "<p>We'll search the docs for <code>pathlib</code>, open its page and look at the main class.</p>"
+    },
+    {
+      "title": "Search the docs",
+      "html": "<p>I typed <code>pathlib</code> into <b>Quick search</b> and pressed Enter. The highlighted result is the module's main page.</p>",
+      "actions": [
+        { "click": "input[name=q] >> visible=true" },
+        { "type": "pathlib" },
+        { "press": "Enter" },
+        { "waitFor": "#search-results a:has-text('pathlib — Object-oriented')" },
+        { "highlight": "#search-results a:has-text('pathlib — Object-oriented')", "label": "Best match" }
+      ]
+    },
+    {
+      "title": "The Path class",
+      "html": "<p>I opened the <code>pathlib</code> page and scrolled to <code>Path</code>, the class you'll use most. It is a filesystem path for the current OS.</p>",
+      "actions": [
+        { "click": "#search-results a:has-text('pathlib — Object-oriented')" },
+        { "waitFor": "[id='pathlib.Path']" },
+        { "highlight": "[id='pathlib.Path']", "label": "Main class" }
+      ]
+    }
+  ]
+}
