@@ -27,7 +27,7 @@ The panel sends each click and message to the relay, and the relay prints it as 
 - `SKILL.md`: the instructions Claude follows.
 - `guide-panel.js`: the panel. It works on any site; Claude passes in each step's content. The API is at the top of the file.
 - `guide-relay.py`: the event relay (Python standard library only).
-- `tests/panel-overlap.html`: browser test that the panel never covers a highlighted element.
+- `tests/panel.html`: browser tests for the panel (overlap, spinner and autoplay).
 
 ## Use it
 
@@ -44,7 +44,7 @@ The test needs a real browser, because it relies on smooth scrolling:
 
 ```sh
 python3 -m http.server -d ~/.claude/skills/guided-web-walkthrough 8000
-open http://127.0.0.1:8000/tests/panel-overlap.html
+open http://127.0.0.1:8000/tests/panel.html
 ```
 
 The page shows `RESULT: PASS` or `RESULT: FAIL`, with one line per case.
