@@ -70,6 +70,14 @@ const cases = {
     const text = panelPart(".countdown").textContent;
     return /Next step in 22s/.test(text) ? "PASS" : `FAIL countdown reads "${text}"`;
   },
+  // Words split by tags still count separately, and lone punctuation is not a word.
+  async autoplayCountsWordsAcrossTags() {
+    __guide.autoplay(true);
+    // "Auto" plus 60 words split by <br>, plus 10 lone dashes: 61 words, 2 + 61 / 180 * 60 = 22.3, so 23 s.
+    __guide.show({ step: 1, total: 3, title: "Auto", html: `<p>${"word<br>word ".repeat(30)}${" - ".repeat(10)}</p>` });
+    const text = panelPart(".countdown").textContent;
+    return /Next step in 23s/.test(text) ? "PASS" : `FAIL countdown reads "${text}"`;
+  },
   // Short text still gets the 5 s floor, so a viewer can pause the video.
   async autoplayPredictsMinimum() {
     __guide.autoplay(true);

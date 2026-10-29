@@ -349,8 +349,9 @@
   // Seconds a slow-to-medium reader needs for a step: 180 words a minute, plus 2 s to
   // find the text and glance at the highlights, and never under 5 s.
   function readingSeconds({ title = "", html = "" }) {
-    const text = `${title} ${new DOMParser().parseFromString(html, "text/html").body.textContent}`;
-    const words = text.split(/\s+/).filter(Boolean).length;
+    // A space before each tag keeps words apart across <br>, </p> and similar.
+    const body = new DOMParser().parseFromString(html.replace(/</g, " <"), "text/html").body.textContent;
+    const words = `${title} ${body}`.match(/[\p{L}\p{N}]+(?:['’-][\p{L}\p{N}]+)*/gu)?.length ?? 0;
     return Math.max(5, Math.ceil(2 + (words / 180) * 60));
   }
 
