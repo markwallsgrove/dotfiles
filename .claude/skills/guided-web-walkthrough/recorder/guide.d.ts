@@ -24,9 +24,11 @@ declare global {
     busy(isBusy: boolean): void;
     autoplay(seconds: number | boolean): void;
     waitForEvent(timeoutMs?: number): Promise<GuideEvent | null>;
-    highlight(target: string | Element, label?: string): boolean;
+    /** Throws if nothing visible matches. */
+    highlight(target: string | Element, label?: string): true;
     clearHighlights(): void;
-    pointTo(target: string | Element): Promise<{ x: number; y: number; viewportWidth: number } | null>;
+    /** Throws if nothing visible matches. */
+    pointTo(target: string | Element): Promise<{ x: number; y: number; viewportWidth: number }>;
     find(text: string): Element | null;
   }
 

@@ -72,6 +72,44 @@ const cases = {
     if (style.position !== "fixed") return `FAIL panel is unstyled (position ${style.position})`;
     return panelRect().width <= 400 ? "PASS" : `FAIL panel is ${Math.round(panelRect().width)}px wide`;
   },
+  // Screen-reader-only text (1px, clipped) is not something to show the viewer.
+  async findSkipsVisuallyHidden() {
+    document.body.insertAdjacentHTML("afterbegin", `<h3 style="position:absolute; width:1px; height:1px; overflow:hidden;
+      clip-path:inset(50%); white-space:nowrap">Hidden heading</h3>`);
+    const found = __guide.find("Hidden heading");
+    return found ? `FAIL find returned the hidden <${found.tagName.toLowerCase()}>` : "PASS";
+  },
+  // Highlighting nothing must fail loudly, so a wrong selector is noticed at once.
+  async highlightRejectsMissing() {
+    try {
+      __guide.highlight("#does-not-exist", "Missing");
+    } catch {
+      return "PASS";
+    }
+    return "FAIL highlight of a missing element did not throw";
+  },
+  // A hidden element must not be highlighted, and the page must not scroll to it.
+  async highlightRejectsHidden() {
+    document.body.insertAdjacentHTML("beforeend", `<h3 id="sr-only" style="position:absolute; width:1px; height:1px;
+      overflow:hidden; clip-path:inset(50%)">Hidden</h3>`);
+    const before = scrollY;
+    try {
+      __guide.highlight(document.getElementById("sr-only"), "Hidden");
+    } catch {
+      await sleep(800);
+      return scrollY === before ? "PASS" : `FAIL page scrolled from ${before} to ${scrollY}`;
+    }
+    return "FAIL highlight of a hidden element did not throw";
+  },
+  // pointTo fails the same way, so a click is never aimed at nothing.
+  async pointToRejectsMissing() {
+    try {
+      await __guide.pointTo("#does-not-exist");
+    } catch {
+      return "PASS";
+    }
+    return "FAIL pointTo of a missing element did not throw";
+  },
   // While the agent works, the previous step's text gives way to a spinner.
   async busyShowsSpinner() {
     __guide.show({ step: 1, total: 3, title: "Previous title", html: "<p>Previous text.</p>" });

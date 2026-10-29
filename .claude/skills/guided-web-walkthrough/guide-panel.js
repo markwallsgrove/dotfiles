@@ -18,10 +18,12 @@
 //   waitForEvent(timeoutMs)    next viewer event { type: "next"|"prev"|"message"|"close", text?, step }
 //                              or null on timeout; resolves the moment it happens
 //   highlight(target, label?)  outline an element (selector, element, or visible text);
-//                              the panel moves aside if it would cover it
+//                              the panel moves aside if it would cover it. Throws if
+//                              nothing visible matches
 //   clearHighlights()
 //   pointTo(target)            glide the visible pointer to an element; returns its
-//                              centre { x, y, viewportWidth } in CSS px
+//                              centre { x, y, viewportWidth } in CSS px. Throws if
+//                              nothing visible matches
 //   find(text)                 first visible element whose text or label matches
 //
 // On the last step Next becomes Close: it removes the panel, forgets its state, and
@@ -276,10 +278,19 @@
     panel.style.maxHeight = `${Math.max(200, cap)}px`;
   }
 
+  // Screen-reader-only text is sized 1px or less, so it counts as hidden too.
   const isVisible = (el) => {
     const r = el.getBoundingClientRect();
-    return r.width > 0 && r.height > 0 && getComputedStyle(el).visibility !== "hidden";
+    const style = getComputedStyle(el);
+    return r.width > 1 && r.height > 1 && style.visibility !== "hidden" && style.opacity !== "0";
   };
+  // The visible element a target names, or an error saying what didn't match.
+  function visibleTarget(target, caller) {
+    const el = resolve(target);
+    if (!el) throw new Error(`${caller}: nothing matches ${String(target)}`);
+    if (!isVisible(el)) throw new Error(`${caller}: ${String(target)} is not visible`);
+    return el;
+  }
   function find(text) {
     const want = text.trim().toLowerCase();
     const leaves = [...document.querySelectorAll("body *")].filter(
@@ -450,8 +461,7 @@
       });
     },
     highlight(target, label) {
-      const el = resolve(target);
-      if (!el) return false;
+      const el = visibleTarget(target, "highlight");
       el.scrollIntoView({ block: "center", behavior: "smooth" });
       const box = document.createElement("div");
       box.className = "hl";
@@ -474,8 +484,7 @@
       $(".dim").style.display = "none";
     },
     async pointTo(target) {
-      const el = resolve(target);
-      if (!el) return null;
+      const el = visibleTarget(target, "pointTo");
       el.scrollIntoView({ block: "center", behavior: "smooth" });
       await settle(el);
       moveAside([el, ...highlights.map((h) => h.el)], { scroll: true });

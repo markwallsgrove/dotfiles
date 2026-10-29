@@ -103,7 +103,6 @@ async function act(page, action) {
     const shows = () => page.locator(action.click).first().waitFor({ state: "visible", timeout: 3000 }).then(() => true, () => false);
     if (action.optional && !(await shows())) return;
     const point = await page.evaluate((el) => window.__guide.pointTo(el), await visible(action.click));
-    if (!point) throw new Error(`cannot point at ${action.click}`);
     await page.mouse.click(point.x, point.y);
   } else if ("type" in action) {
     await page.keyboard.type(action.type, { delay: 90 });
